@@ -4,7 +4,40 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-09-04**
+> **Última actualización: 2026-09-07**
+
+## Sesión 2026-09-07
+
+### 266. Regalos como BONO en 1girox (ruleta, reembolso, cashback, fueguito…) — ya no figuran como "Carga"
+- **Pedido owner:** en el panel de 1girox los premios de ruleta (`vip-roulette-…`) y
+  los reembolsos (`vip-rf-daily-…`) aparecían como **Carga** normal, mezclados con las
+  cargas reales. Causa: desde la v1.7 se acreditaban con `depositToUser` (+`multiplier`)
+  para evitar el "bono a reclamar" y el pisado de bonos.
+- **Solución:** `girox.creditGift(username, amount, {description, reference, rolloverX})`
+  (giroxService): va por `POST /players/{u}/bonus` con el rollover del flujo → figura
+  como BONO. Guards: feat/`standalone_enabled`, multiplier permitido y `fixed_min/max`
+  (de `GET /config`, cacheado); con rollover > 0, si el jugador tiene bono en curso o sin
+  reclamar (> $50, `bonusLocked + claimableTotal`) → **cae a depósito con multiplier**
+  (comportamiento anterior; nunca se le debita el bono viejo a nadie). Rollover 0 →
+  bono directo (v1.10: disponible al instante, no pisa). Errores definitivos de
+  `/bonus` (422 / feature_disabled / bonus_out_of_range) → depósito; errores de red →
+  se devuelve el fallo y el caller reintenta con la MISMA reference (sin doble pago).
+  Log WARN cuando un regalo cae a depósito, con el motivo.
+- **Flujos migrados:** ruleta de bienvenida (cash), ruleta diaria, cashback instantáneo,
+  fueguito (todos con su rollover), y por el default de `creditUserBalance` (ahora
+  `creditGift` con rollover 0): reembolso semanal/mensual (con descripción nueva),
+  rakeback, bono de nivel VIP, comisiones de referidos. Sin cambios: código de
+  bienvenida, lotes (fichas) y bono manual del cajero (ya iban por `/bonus` con sus
+  propios guards), cargas reales (manual/hgcash/self-deposit), devoluciones de retiro.
+- **Auto-reclamo:** los bonos con rollover quedan "a reclamar" al cumplir el objetivo
+  (`claim_required`) → `_autoClaimOnEntry` en `/api/platform/session` llama
+  `claimPendingBonus` en segundo plano (throttle 15 min por usuario; idempotente). El
+  jugador también puede reclamar desde el regalito del casino.
+- **Validado:** `node --check` OK (giroxService.js, server.js). **Back necesita
+  redeploy.** PROBAR: girar la ruleta diaria con premio en saldo → en el panel de
+  1girox figura como Bono (no Carga) con rollover; reclamar reembolso semanal → Bono
+  sin rollover disponible al instante; usuario con bono activo gira la ruleta → log
+  "fue como DEPÓSITO: bono activo" y el premio entra igual.
 
 ## Sesión 2026-09-04
 

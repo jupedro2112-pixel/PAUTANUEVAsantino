@@ -5287,6 +5287,25 @@ const platformSessionLimiter = rateLimit({
   message: { error: 'Demasiados intentos de entrar al casino. Esperá un momento.' }
 });
 
+const _autoClaimSeen = new Map(); // username → ts del último intento
+const AUTO_CLAIM_THROTTLE_MS = 15 * 60 * 1000;
+function _autoClaimOnEntry(username) {
+  try {
+    const key = String(username || '').toLowerCase();
+    if (!key) return;
+    const now = Date.now();
+    if ((_autoClaimSeen.get(key) || 0) > now - AUTO_CLAIM_THROTTLE_MS) return;
+    _autoClaimSeen.set(key, now);
+    if (_autoClaimSeen.size > 5000) { for (const [k, ts] of _autoClaimSeen) if (ts < now - AUTO_CLAIM_THROTTLE_MS) _autoClaimSeen.delete(k); }
+    setImmediate(async () => {
+      try {
+        const r = await girox.claimPendingBonus(username);
+        if (r && r.success && r.amount > 0) logger.info(`[girox-sso] auto-claim al entrar: ${username} liberó $${r.amount} de bono cumplido`);
+      } catch (_) {}
+    });
+  } catch (_) {}
+}
+
 async function platformSessionHandler(req, res) {
   try {
     // Si falta la config, se corta acá con un log EXPLÍCITO. Sin esto, el fallo se ve
@@ -5333,6 +5352,12 @@ async function platformSessionHandler(req, res) {
       logger.error(`[girox-sso] falló para ${user.username}: ${session.error} (${session.code})`);
       return res.status(502).json({ error: 'El casino no está respondiendo. Reintentá en un momento.' });
     }
+
+    // #266 AUTO-RECLAMO al entrar: los regalos con rollover (ruleta, cashback,
+    // fueguito) van como BONO y, al cumplir el objetivo, quedan "a reclamar".
+    // Se reclaman solos acá (idempotente; amount 0 si no hay nada), con
+    // throttle por usuario para no gastar rate limit en cada entrada.
+    _autoClaimOnEntry(user.username);
 
     res.json({
       success: true,
@@ -7846,7 +7871,7 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
         throw e;
       }
 
-      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId));
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
 
       if (!depositResult.success) {
         // No se pudo acreditar → liberar la reserva para permitir reintentar.
@@ -8010,7 +8035,7 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
         throw e;
       }
 
-      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId));
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
 
       if (!depositResult.success) {
         // No se pudo acreditar → liberar la reserva para permitir reintentar.
@@ -11983,10 +12008,11 @@ app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, 
       // global configurable del panel (el mismo del fueguito).
       let _wrMult = Number(prize.rolloverX) > 0 ? Number(prize.rolloverX) : 0;
       if (!_wrMult) { try { _wrMult = Number(await getFireRolloverMultiplier()) || 0; } catch (_) {} }
-      const credit = await girox.depositToUser(
-        user.username, prize.value, 'Ruleta de bienvenida — premio en saldo', `vip-wroul-${user.id}`,
-        _wrMult > 0 ? { multiplier: _wrMult } : null
-      );
+      // #266: como BONO de 1girox (creditGift: /bonus con rollover, cae a depósito
+      // con multiplier solo si el jugador ya tiene un bono activo o el feat no está).
+      const credit = await girox.creditGift(user.username, prize.value, {
+        description: 'Ruleta de bienvenida — premio en saldo', reference: `vip-wroul-${user.id}`, rolloverX: _wrMult
+      });
       if (!credit.success) {
         await User.updateOne(
           { id: user.id, welcomeRouletteStatus: 'pending' },
@@ -12258,9 +12284,10 @@ app.post('/api/cashback/claim', authMiddleware, authLimiter, async (req, res) =>
     const ref = `vip-cbk-${userId}-${st.dateKey}-${claimDoc.seq}`;
     let credit;
     try {
-      credit = await girox.depositToUser(username, amount,
-        `Reembolso ${st.pct}% de tu pérdida acumulada`, ref,
-        st.rolloverX > 0 ? { multiplier: st.rolloverX } : null);
+      // #266: como BONO de 1girox (no como Carga), con el rollover del panel.
+      credit = await girox.creditGift(username, amount, {
+        description: `Reembolso ${st.pct}% de tu pérdida acumulada`, reference: ref, rolloverX: st.rolloverX
+      });
     } catch (e) { credit = { success: false, error: e.message }; }
     if (!credit || !credit.success) {
       await CashbackClaim.deleteOne({ id: claimDoc.id }).catch(() => {});
@@ -13132,10 +13159,10 @@ app.post('/api/fire/claim-reward', authMiddleware, async (req, res) => {
     // el casino y encima pisa un bono activo previo. La reference es la MISMA de
     // siempre (se pasa explícita y _buildReference no la toca) → idempotencia intacta.
     const _fireMult = await getFireRolloverMultiplier();
-    const bonusResult = await girox.depositToUser(
-      username, rewardAmount, rewardDesc, _fireRef,
-      _fireMult > 0 ? { multiplier: _fireMult } : null
-    );
+    // #266: como BONO de 1girox (creditGift), misma reference de siempre.
+    const bonusResult = await girox.creditGift(username, rewardAmount, {
+      description: rewardDesc, reference: _fireRef, rolloverX: _fireMult
+    });
 
     if (!bonusResult.success) {
       // La acreditación falló → DEVOLVER el premio a pendiente para que el cliente
@@ -18786,8 +18813,10 @@ app.post('/api/roulette/spin', authMiddleware, async (req, res) => {
     const _dRoll = Number(pick.rolloverX) || 0;
     let credit;
     try {
-      credit = await girox.depositToUser(username, prizeARS, 'Ruleta diaria — premio en saldo',
-        `vip-roulette-${spinDoc.id}`, _dRoll > 0 ? { multiplier: _dRoll } : null);
+      // #266: como BONO de 1girox (creditGift), no como Carga.
+      credit = await girox.creditGift(username, prizeARS, {
+        description: 'Ruleta diaria — premio en saldo', reference: `vip-roulette-${spinDoc.id}`, rolloverX: _dRoll
+      });
     } catch (e) {
       credit = { success: false, error: e.message };
     }

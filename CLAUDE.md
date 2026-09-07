@@ -91,12 +91,16 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   comisiones de referidos sin comerse el límite de 60 req/min.
 - **Reembolsos por RANGO** (Bronce 3% / Plata 6% / Oro 10%), según lo perdido EN EL
   PERÍODO que se reclama — no un acumulado. Ver `src/utils/refundTiers.js`.
-- **Bonos "a reclamar":** desde la v1.7 un bono no se libera solo. Por eso reembolsos,
-  ruleta y bono de instalación se acreditan con **depósito libre**, no con `/bonus`.
-  El **fueguito** (2026-08-05) va con **depósito CON `multiplier`** (rollover x5
-  configurable en el panel): jugable al instante, retirable recién tras apostar
-  multiplier × premio — el candado lo aplica la plataforma, NO usar `/bonus` para esto.
-  Si alguna vez hiciera falta, está `girox.claimPendingBonus()`.
+- **Regalos = BONO de 1girox (#266, 2026-09-07).** Ruleta (bienvenida/diaria),
+  reembolsos, cashback, fueguito, rakeback, nivel VIP y comisiones de referidos van por
+  `girox.creditGift()` → `POST /players/{u}/bonus` con el rollover del flujo (figuran
+  como **Bono** en el panel de 1girox, no como Carga). Rollover 0 = regalo directo
+  (v1.10: disponible al instante, no pisa nada). Con rollover > 0 el bono PISA a un bono
+  activo → `creditGift` cae a **depósito con `multiplier`** (lo de antes) si el jugador
+  tiene bono en curso/sin reclamar, o si el feat no está. Al cumplir el rollover el bono
+  queda "a reclamar" → se auto-reclama al entrar al casino (`_autoClaimOnEntry`,
+  throttle 15 min) y tras cada depósito con bonus. NO volver a usar `depositToUser`
+  para regalos.
 - **Roles:** `user`, `admin` (todo), `depositor` (solo cargas), `withdrawer` (solo
   retiros), `publisher_admin` (solo crea usuarios de su publicista — lockdown via
   `PUBLISHER_ADMIN_ALLOWED_PATHS`).

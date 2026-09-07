@@ -953,10 +953,88 @@ async function withdrawFromUser(username, amount, description = '', reference = 
   return _moneyResult(r.data);
 }
 
+// ============================================================
+// REGALOS COMO BONO (owner 2026-09-07, #266)
+// ============================================================
+// Ruleta (bienvenida/diaria), reembolso semanal/mensual, cashback, fueguito,
+// rakeback, nivel VIP y comisiones de referidos van por POST /players/{u}/bonus
+// → en el panel de 1girox figuran como BONO, no como "Carga" (antes iban como
+// depósito con multiplier y se mezclaban con las cargas reales). Reglas:
+//  - rolloverX 0 → (v1.10) regalo directo: disponible/retirable al instante, sin
+//    reclamo, y NO pisa el bono en curso del jugador.
+//  - rolloverX > 0 → jugable ya, retirable tras apostar N× el bono; al cumplir
+//    queda "a reclamar" (claim_required) → server.js lo auto-reclama al entrar
+//    al casino. Como un bono con rollover PISA al bono activo (le debita el
+//    resto), si el jugador tiene bono en curso o sin reclamar por más de
+//    GIFT_BONUS_GUARD_MIN_ARS se cae al DEPÓSITO con multiplier (el
+//    comportamiento anterior): nunca se le quita plata a nadie.
+//  - Feat apagado, multiplier no permitido o monto fuera de fixed_min/max →
+//    depósito (con multiplier si había rollover).
+//  - Error de red / 5xx en /bonus → se devuelve el fallo tal cual (el caller
+//    reintenta con la MISMA reference y la plataforma deduplica). NO se cae al
+//    depósito en ese caso: podría pagar dos veces.
+const GIFT_BONUS_GUARD_MIN_ARS = 50;
+async function creditGift(username, amount, opts = {}) {
+  const amt = _normalizeAmount(amount);
+  if (amt === null) return { success: false, error: 'Monto inválido', code: 'invalid_amount' };
+  const roll = Math.max(0, Math.round(Number(opts.rolloverX) || 0));
+  const description = opts.description || '';
+  const reference = opts.reference || null;
+
+  let viaBonus = true, why = null;
+  try {
+    const c = await getPlatformConfig();
+    const b = (c.success && c.config && c.config.bonus) || null;
+    if (!b || b.enabled === false || b.standalone_enabled === false) {
+      viaBonus = false; why = 'bono suelto deshabilitado en la plataforma';
+    } else {
+      const allowed = Array.isArray(b.multipliers) ? b.multipliers.map(Number) : null;
+      if (allowed && allowed.length && !allowed.includes(roll)) { viaBonus = false; why = `multiplier x${roll} no permitido (${allowed.join(',')})`; }
+      const mn = Number(b.fixed_min) || 0, mx = Number(b.fixed_max) || 0;
+      if (viaBonus && ((mn > 0 && amt < mn) || (mx > 0 && amt > mx))) { viaBonus = false; why = `monto $${amt} fuera de fixed_min/max (${mn}-${mx})`; }
+    }
+  } catch (_) { /* sin config disponible: se intenta el bono igual */ }
+
+  if (viaBonus && roll > 0) {
+    try {
+      const info = await getUserInfoByName(username, { fresh: true });
+      const locked = info ? (Number(info.bonusLocked) || 0) : 0;
+      const claim = info ? (Number(info.claimableTotal) || 0) : 0;
+      if (locked + claim > GIFT_BONUS_GUARD_MIN_ARS) {
+        viaBonus = false;
+        why = `bono activo en el casino ($${locked} en rollover, $${claim} sin reclamar) — un bono nuevo lo pisaría`;
+      }
+    } catch (_) { /* si no se pudo leer, se sigue: la plataforma valida igual */ }
+  }
+
+  if (viaBonus) {
+    const r = await creditUserBalance(username, amt, reference, { multiplier: roll, description });
+    if (r.success) { r.via = 'bonus'; return r; }
+    const definitivo = ['feature_disabled', 'bonus_out_of_range', 'validation_error', 'invalid_multiplier'].includes(r.code) || r.httpStatus === 422;
+    if (!definitivo) return r;
+    why = `/bonus rechazó (${r.code || r.error})`;
+  }
+
+  const r = await depositToUser(username, amt, description, reference, roll > 0 ? { multiplier: roll } : null);
+  if (r.success) {
+    r.via = 'deposit';
+    r.fallbackReason = why;
+    logger.warn(`[girox] regalo a ${username} $${amt} (x${roll}) fue como DEPÓSITO y no como bono: ${why || 's/motivo'}`);
+  }
+  return r;
+}
+
 /**
  * Acredita un bono / premio / reembolso.
  *
- * Por defecto usa el endpoint de DEPÓSITO sin multiplier (carga libre) — es el
+ * Desde #266 (2026-09-07) el default (sin `opts.multiplier`) va por `creditGift`
+ * con rollover 0 → BONO directo en 1girox (figura como Bono, disponible al
+ * instante, no pisa nada) con caída automática a depósito libre si el feat no
+ * está. Con `opts.multiplier` explícito llama a /bonus directo (sin guards):
+ * lo usan los flujos que ya validan el bono activo por su cuenta (código de
+ * bienvenida, lotes, bono manual del cajero).
+ *
+ * (Histórico) Por defecto usaba el endpoint de DEPÓSITO sin multiplier (carga libre) — es el
  * equivalente exacto del `individual_bonus` de JUGAYGANA que se usaba para reembolsos,
  * premios de ruleta, fueguito y bono de instalación. La plata queda jugable Y retirable
  * al instante, que es como funcionaba hasta ahora.
@@ -1003,8 +1081,8 @@ async function creditUserBalance(username, amount, reference = null, opts = {}) 
     return _moneyResult(r.data);
   }
 
-  // Bono libre = depósito sin rollover (comportamiento por defecto)
-  return depositToUser(username, amt, opts.description || '', _buildReference('bonus', reference));
+  // Bono libre (#266): BONO directo (multiplier 0) con fallback a depósito libre.
+  return creditGift(username, amt, { reference: _buildReference('bonus', reference), description: opts.description || '', rolloverX: 0 });
 }
 
 // ============================================================
@@ -1353,6 +1431,7 @@ module.exports = {
   createSession,
   // plata
   depositToUser,
+  creditGift,
   withdrawFromUser,
   creditUserBalance,
   // saldo
