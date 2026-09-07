@@ -12165,12 +12165,17 @@ async function _cashbackStateToday(userId, username, opts) {
     uDoc.createdAt ? new Date(uDoc.createdAt).getTime() : CASHBACK_STATS_EPOCH.getTime(),
     CASHBACK_STATS_EPOCH.getTime()
   ));
+  // #267: la base descuenta TODO lo que entró sin ser carga real: bonus de los
+  // depósitos + Transactions 'bonus' (ruletas, código, lotes, bono manual) +
+  // fueguito + reembolsos semanal/mensual + rakeback + nivel VIP + comisiones de
+  // referidos. Si el cliente pierde plata que le regalamos, no se le reembolsa.
+  const GIFT_TX_TYPES = ['bonus', 'fire_reward', 'refund', 'rakeback', 'vip_levelup', 'referral_commission'];
   const giftAgg = await Transaction.aggregate([
-    { $match: { userId: String(userId), type: { $in: ['deposit', 'bonus'] }, timestamp: { $gte: _giftFrom } } },
+    { $match: { userId: String(userId), type: { $in: ['deposit', ...GIFT_TX_TYPES] }, timestamp: { $gte: _giftFrom } } },
     { $group: { _id: null,
         depBonus: { $sum: { $cond: [{ $eq: ['$type', 'deposit'] }, { $ifNull: ['$bonus', 0] }, 0] } },
         bonusCredits: { $sum: { $cond: [
-          { $and: [{ $eq: ['$type', 'bonus'] }, { $ne: ['$metadata.source', 'instant_cashback'] }] },
+          { $and: [{ $in: ['$type', GIFT_TX_TYPES] }, { $ne: ['$metadata.source', 'instant_cashback'] }] },
           '$amount', 0] } } } }
   ]);
   const giftedLife = ((giftAgg && giftAgg[0] && giftAgg[0].depBonus) || 0) +
@@ -18851,6 +18856,16 @@ app.post('/api/roulette/spin', authMiddleware, async (req, res) => {
         $inc: { creditAttempts: 1 }
       }
     ).catch(() => {});
+    // #267: registro en Transaction (antes NO quedaba → invisible en el panel de
+    // Transacciones y, peor, el premio perdido NO se descontaba de la base del
+    // reembolso instantáneo). Idempotente por spin (un solo crédito por giro).
+    await Transaction.create({
+      id: uuidv4(), type: 'bonus', userId, username, amount: Number(prizeARS),
+      description: `Ruleta diaria — premio en saldo (${pick.label})${_dRoll ? ` · rollover x${_dRoll}` : ''}`,
+      adminUsername: 'auto-roulette', adminRole: 'system', transactionId: txId,
+      metadata: { source: 'daily_roulette', spinId: spinDoc.id, rolloverX: _dRoll, via: credit.via || null },
+      timestamp: new Date()
+    }).catch((e) => logger.warn(`[ROULETTE] no se pudo guardar la Transaction del giro ${spinDoc.id}: ${e.message}`));
     logger.info(`[ROULETTE] ${username} → $${prizeARS} acreditado tx=${txId}`);
     await _emitAdminOnlyChatNote(userId, username,
       `🎰 Ruleta DIARIA: ganó ${pick.label} → SALDO acreditado automático $${Number(prizeARS).toLocaleString('es-AR')}${_dRoll ? ` con rollover x${_dRoll}` : ''}. No hay que hacer nada.`).catch(() => {});

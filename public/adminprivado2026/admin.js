@@ -5571,7 +5571,7 @@ function renderTransactions(transactions) {
         <tr>
             <td>${formatDateTime(t.timestamp || t.createdAt)}</td>
             <td>${escapeHtml(t.username)}</td>
-            <td><span class="type-badge ${t.type}">${getTransactionTypeLabel(t.type)}</span></td>
+            <td><span class="type-badge ${t.type}">${getTransactionTypeLabel(t.type)}</span>${getTransactionSourceLabel(t)}</td>
             <td>${formatMoney(t.amount)}</td>
             <td>${escapeHtml(t.description || '-')}</td>
             <td>${escapeHtml(t.adminUsername || '-')}</td>
@@ -5586,9 +5586,31 @@ function getTransactionTypeLabel(type) {
         bonus: 'Bonificación',
         fire_reward: '🔥 Fueguito',
         refund: 'Reembolso',
-        referral_commission: '🤝 Referido'
+        referral_commission: '🤝 Referido',
+        rakeback: '💎 Rakeback VIP',
+        vip_levelup: '👑 Nivel VIP'
     };
     return labels[type] || type;
+}
+
+// #267: sub-etiqueta con el ORIGEN de la transacción (metadata.source) para que
+// en la tabla se distinga qué es cada bonificación/depósito de un vistazo.
+function getTransactionSourceLabel(t) {
+    const src = (t && t.metadata && t.metadata.source) || '';
+    const map = {
+        welcome_roulette: '🎡 ruleta bienvenida',
+        daily_roulette: '🎰 ruleta diaria',
+        instant_cashback: '📉 reembolso instantáneo',
+        welcome_code: '🎁 código bienvenida',
+        notif_batch: '🎁 lote con regalo',
+        auto_hgcash: '🏦 auto hgcash',
+        payout_refund: '↩️ devolución de retiro',
+        install_bonus: '📱 bono instalación',
+        welcome_gift: '🎁 regalo bienvenida'
+    };
+    const txt = map[src] || (src ? src.replace(/_/g, ' ') : '');
+    if (!txt) return '';
+    return '<div style="font-size:10.5px;color:#9aa4b2;margin-top:2px;">' + escapeHtml(txt) + '</div>';
 }
 
 function filterTransactions(type) {

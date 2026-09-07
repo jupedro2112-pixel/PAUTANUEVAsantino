@@ -8,6 +8,23 @@
 
 ## Sesión 2026-09-07
 
+### 267. Transacciones del panel: la RULETA DIARIA no dejaba registro (ni se descontaba del reembolso) + origen visible por fila
+- **Pregunta owner:** "¿en Transacciones del panel aparece bien detallado qué es cada
+  uno?". Revisión: sí para casi todo (tipo + descripción), pero:
+  1. **La ruleta diaria (premio en saldo) NO creaba Transaction** → invisible en el
+     panel y, peor, **no se descontaba de la base del reembolso instantáneo** (un
+     premio de $10.000 perdido inflaba el netwin y generaba cashback). Ahora crea
+     `type:'bonus'`, `metadata.source:'daily_roulette'` (spinId, rolloverX, via).
+  2. **Base del reembolso (#257e) ampliada:** descuenta TODO lo que entró sin ser
+     carga real: `deposit.bonus` + 'bonus' + **fire_reward, refund (semanal/mensual),
+     rakeback, vip_levelup, referral_commission** (antes solo 'bonus'). Regla: si
+     pierde plata que le regalamos/pagamos nosotros, no se le reembolsa.
+  3. **Panel:** labels para `rakeback` (💎) y `vip_levelup` (👑) que salían crudos, y
+     sub-etiqueta de ORIGEN debajo del tipo (🎡 ruleta bienvenida / 🎰 ruleta diaria /
+     📉 reembolso instantáneo / 🎁 código bienvenida / 🎁 lote / 🏦 auto hgcash /
+     ↩️ devolución de retiro…). **admin-sw → v51.**
+- **Validado:** `node --check` OK. Back necesita redeploy.
+
 ### 266. Regalos como BONO en 1girox (ruleta, reembolso, cashback, fueguito…) — ya no figuran como "Carga"
 - **Pedido owner:** en el panel de 1girox los premios de ruleta (`vip-roulette-…`) y
   los reembolsos (`vip-rf-daily-…`) aparecían como **Carga** normal, mezclados con las
