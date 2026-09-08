@@ -22,9 +22,26 @@
   panel da 404) y **`ALLOWED_ORIGINS`** (CORS), + restart para tomar los SSM,
   prueba por URL EB antes de mover el dominio, y aviso de no tener los dos
   entornos semanas en paralelo sobre la misma Mongo.
-- Sin cambios de código. Los scripts `aws-export-config.sh` /
-  `aws-bootstrap-clone.sh` sirven tal cual (sus comentarios de ejemplo siguen
-  diciendo nardo — es solo ejemplo).
+- **EJECUTADO en la misma sesión (cuenta nueva `zamuxavier` 062472745735, sa-east-1),
+  por CloudShell — sin EC2/S3/rol:** iam ✅ · ssm 35 params → `/pautanuevasantino/prod/`
+  (se BORRARON `AWS_ACCESS_KEY_ID/SECRET`: eran credenciales IAM de la cuenta vieja =
+  vínculo técnico; SMS queda por rol de instancia/off) · redis `clon-redis`
+  (replication group t4g.micro, **sin TLS** porque el pegado cortó el flag → `redis://`)
+  · eb `PAUTANUEVAsantino` / `PAUTANUEVAsantino-env` (HTTP, sin cert; URL
+  `pautanuevasantino-env.eba-am24im4u.sa-east-1.elasticbeanstalk.com`) · SSM
+  REDIS_URL/ADMIN_HOST/ALLOWED_ORIGINS/PUBLIC_BASE_URL apuntando a la URL EB · SG default
+  `sg-05821d7d9b52c9ecf` en el Redis + regla 6379 desde `sg-0c7bd403723c54794` · deploy
+  `v20260908-1919` por CLI (`git archive` → S3 → create-application-version →
+  update-environment) → **`curl` 200**. Misma Mongo/1girox/hgcash que producción (es
+  una MUDANZA, no una marca nueva). Pendiente: dominio+cert (owner a mano), SSM al
+  dominio, webhook hgcash, Firebase, limpieza, apagar el viejo.
+- **Fixes al script `aws-bootstrap-clone.sh` que salieron de la ejecución real:**
+  (1) `redis` como `create-replication-group` (TLS no se puede pedir en
+  `create-cache-cluster`: "Encryption feature is not supported for engine REDIS");
+  (2) `eb` descarta option-settings de la cuenta vieja (rol de managed updates con ARN
+  viejo — rompía `create-environment` —, `sg-/vpc-/subnet-`, ARNs iam/acm) y fija
+  `ServiceRoleForManagedUpdates` al service-linked role. Lección: en CloudShell las
+  líneas largas se cortan al pegar → comandos cortos, de a uno.
 
 ### 268. Dashboard de Transacciones: la card "Reembolsos" daba $0 (el reembolso instantáneo se contaba como Bonificación)
 - **Pregunta owner:** "en reembolsos siempre aparece 0 y la gente sí reclama". Causa:

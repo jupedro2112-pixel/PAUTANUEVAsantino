@@ -21,8 +21,8 @@
 - [ ] B3 — tar.gz subido al bucket `clon-tmp-*`
 - [ ] C — etapas: [x] iam · [x] ssm (35 → `/pautanuevasantino/prod/`, **AWS_ACCESS_KEY_ID/SECRET borrados** — eran de la cuenta vieja) · [x] redis (`clon-redis` creado 2026-09-08 **SIN TLS** — el pegado se cortó y quedó sin `--transit-encryption-enabled`; se dejó así: REDIS_URL va con `redis://`, no `rediss://`) · [ ] cert (queda para después, dominio nuevo a definir) · [x] eb (`PAUTANUEVAsantino-env` Launching 2026-09-08 19:05 UTC, HTTP sin cert)
 - [x] D — SSM listos 2026-09-08: REDIS_URL `redis://clon-redis.fesp3c.ng.0001.sae1.cache.amazonaws.com:6379/0` · ADMIN_HOST/ALLOWED_ORIGINS/PUBLIC_BASE_URL = URL EB `pautanuevasantino-env.eba-am24im4u.sa-east-1.elasticbeanstalk.com` (http, hasta que haya dominio)
-- [x] D — SG Redis: el nodo usa el SG default `sg-05821d7d9b52c9ecf`, regla 6379 desde el SG de instancias `sg-0c7bd403723c54794` ✅ · [x] deploy `v20260908-1919` (por CLI desde CloudShell: `git archive` → S3 bucket `elasticbeanstalk-sa-east-1-062472745735` → create-application-version → update-environment) · [ ] pruebas por URL EB · [ ] dominio+cert · [ ] hgcash
-- [ ] D — limpieza (EC2, bucket, rol, archivo en la PC)
+- [x] D — SG Redis: el nodo usa el SG default `sg-05821d7d9b52c9ecf`, regla 6379 desde el SG de instancias `sg-0c7bd403723c54794` ✅ · [x] deploy `v20260908-1919` (por CLI desde CloudShell: `git archive` → S3 bucket `elasticbeanstalk-sa-east-1-062472745735` → create-application-version → update-environment) · [x] app arriba: `curl` 200 en la URL EB (2026-09-08 19:24 UTC) · [ ] verificación panel/log (SSM 33, Redis adapter) · [ ] dominio+cert (owner, a mano) · [ ] SSM PUBLIC_BASE_URL/ALLOWED_ORIGINS al dominio + restart · [ ] hgcash webhook · [ ] Firebase authorized domain
+- [ ] D — limpieza (`rm ~/PAUTANUEVAsantino/clon-export.tar.gz` en CloudShell + el de la PC) · [ ] apagar entorno viejo cuando el nuevo lleve días OK
 
 ## PARTE A — Cuenta VIEJA (sacar la foto y chau)
 
