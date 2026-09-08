@@ -93,6 +93,19 @@ def setopt(ns, name, val):
     for o in opts:
         if o['Namespace'] == ns and o['OptionName'] == name: o['Value'] = val; return
     opts.append({'Namespace': ns, 'OptionName': name, 'Value': val})
+# Todo lo que apunte a recursos/roles de la cuenta VIEJA se descarta (2026-09-08:
+# create-environment fallaba por ServiceRoleForManagedUpdates con el ARN viejo).
+import re
+def foreign(o):
+    v = str(o.get('Value', ''))
+    if o['Namespace'] == 'aws:elasticbeanstalk:managedactions' and o['OptionName'] == 'ServiceRoleForManagedUpdates': return True
+    if re.match(r'^(sg|vpc|subnet|vpce)-[0-9a-f]+(,|$)', v): return True
+    if v.startswith('arn:aws:iam::') or v.startswith('arn:aws:acm:'): return True
+    return False
+dropped = [f"{o['Namespace']}/{o['OptionName']}" for o in opts if foreign(o)]
+opts = [o for o in opts if not foreign(o)]
+if dropped: print('descartados (cuenta vieja): ' + ', '.join(dropped), file=sys.stderr)
+setopt('aws:elasticbeanstalk:managedactions', 'ServiceRoleForManagedUpdates', 'AWSServiceRoleForElasticBeanstalkManagedUpdates')
 setopt('aws:elasticbeanstalk:application:environment', 'SSM_PATH', ssmp)
 setopt('aws:elasticbeanstalk:application:environment', 'PUBLIC_BASE_URL', base)
 setopt('aws:autoscaling:launchconfiguration', 'IamInstanceProfile', 'aws-elasticbeanstalk-ec2-role')
