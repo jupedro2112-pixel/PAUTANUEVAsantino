@@ -15,11 +15,11 @@
 
 ## ESTADO (actualizar acá cada vez que se avance)
 
-- [ ] A — export en la cuenta vieja (`clon-export.tar.gz` bajado)
+- [x] A — export en la cuenta vieja (`clon-export.tar.gz` bajado) — 2026-09-08 (archivo del 04/09, 35 params)
 - [ ] B1 — rol `ec2-bootstrap` creado en la cuenta nueva
 - [ ] B2 — EC2 `bootstrap` corriendo (cuenta nueva habilitada para EC2)
 - [ ] B3 — tar.gz subido al bucket `clon-tmp-*`
-- [ ] C — etapas: [ ] iam · [ ] ssm · [ ] redis · [ ] cert · [ ] eb (Ready)
+- [ ] C — etapas: [x] iam · [x] ssm (35 → `/pautanuevasantino/prod/`, **AWS_ACCESS_KEY_ID/SECRET borrados** — eran de la cuenta vieja) · [ ] redis (`clon-redis` creándose) · [ ] cert · [ ] eb (Ready)
 - [ ] D — REDIS_URL · PUBLIC_BASE_URL · ADMIN_HOST · ALLOWED_ORIGINS en SSM
 - [ ] D — SG Redis 6379 · deploy ZIP · pruebas por URL EB · dominio · hgcash
 - [ ] D — limpieza (EC2, bucket, rol, archivo en la PC)
@@ -138,7 +138,7 @@ La Parte B y el inicio de C quedan solo como plan B si CloudShell no estuviera.
 
 ## PARTE D — Terminar a mano (consola de la cuenta nueva)
 
-1. **Redis:** ElastiCache → `clon-redis-node` → copiar el endpoint.
+1. **Redis:** ElastiCache → Redis → `clon-redis` → copiar el **Primary endpoint** (o el comando `describe-replication-groups` que imprime la etapa).
    SSM → Parameter Store → `/pautanuevasantino/prod/REDIS_URL` → Edit →
    `rediss://<endpoint>:6379/0`.
 2. **PUBLIC_BASE_URL** en SSM → `https://TUDOMINIO.com`.

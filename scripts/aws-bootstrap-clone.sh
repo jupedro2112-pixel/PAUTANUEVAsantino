@@ -6,7 +6,7 @@
 #
 #   bash aws-bootstrap-clone.sh iam                    # rol de instancia (5 policies)
 #   bash aws-bootstrap-clone.sh ssm  /nardo1girox/prod/
-#   bash aws-bootstrap-clone.sh redis                  # ElastiCache t4g.micro TLS
+#   bash aws-bootstrap-clone.sh redis                  # ElastiCache t4g.micro TLS (replication group clon-redis)
 #   bash aws-bootstrap-clone.sh cert tudominio.com     # ACM → imprime el CNAME p/ Cloudflare
 #   bash aws-bootstrap-clone.sh eb   APP ENV /nardo1girox/prod/ https://tudominio.com
 #   bash aws-bootstrap-clone.sh status ENV
@@ -50,12 +50,17 @@ PY
   echo "   PUBLIC_BASE_URL (dominio nuevo), JWT_SECRET/JWT_REFRESH_SECRET si querés rotarlos.";;
 
 redis)
-  aws elasticache create-cache-cluster --cache-cluster-id clon-redis-node \
-    --engine redis --engine-version 7.1 --cache-node-type cache.t4g.micro \
-    --num-cache-nodes 1 --transit-encryption-enabled --region "$REGION" 2>/dev/null || echo "cluster ya existe"
-  echo "⏳ esperá 'available' y sacá el endpoint:"
-  echo "   aws elasticache describe-cache-clusters --cache-cluster-id clon-redis-node --show-cache-node-info --query 'CacheClusters[0].CacheNodes[0].Endpoint' --region $REGION"
-  echo "   → REDIS_URL = rediss://<endpoint>:6379/0 (actualizar en SSM)"
+  # TLS in-transit (rediss://) sólo se puede pedir como REPLICATION GROUP: con
+  # create-cache-cluster la API responde "Encryption feature is not supported
+  # for engine REDIS" (visto 2026-09-08). Un solo nodo, sin réplicas.
+  aws elasticache create-replication-group --replication-group-id clon-redis \
+    --replication-group-description "clon" --engine redis --engine-version 7.1 \
+    --cache-node-type cache.t4g.micro --num-cache-clusters 1 \
+    --transit-encryption-enabled --region "$REGION" \
+    --query 'ReplicationGroup.{Id:ReplicationGroupId,Status:Status}' || echo "(¿ya existe?)"
+  echo "⏳ 5-10 min. Esperá 'available' y sacá el endpoint:"
+  echo "   aws elasticache describe-replication-groups --replication-group-id clon-redis --region $REGION --query 'ReplicationGroups[0].{Status:Status,Endpoint:NodeGroups[0].PrimaryEndpoint.Address}'"
+  echo "   → REDIS_URL = rediss://<Endpoint>:6379/0 (actualizar en SSM)"
   echo "⚠️ Después de crear el entorno EB: abrir 6379 en el SG del Redis desde el SG de las instancias.";;
 
 cert)
