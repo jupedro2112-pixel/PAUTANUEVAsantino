@@ -1,42 +1,70 @@
 # Clonación a cuenta AWS nueva vía EC2 — paso a paso para novato
 
-> Objetivo: replicar el entorno EB en una cuenta AWS NUEVA **sin ninguna
-> conexión técnica** entre cuentas. El único puente es UN archivo que viaja por
-> tu computadora. La app nueva se llama **PAUTANUEVAnardo**.
+> Objetivo: replicar el entorno EB de ESTE proyecto (PAUTANUEVAsantino) en una
+> cuenta AWS NUEVA (de cero) **sin ninguna conexión técnica** entre cuentas. El
+> único puente es UN archivo que viaja por tu computadora.
 > Scripts: `scripts/aws-export-config.sh` y `scripts/aws-bootstrap-clone.sh`.
+>
+> **Nombres nuevos (elegidos 2026-09-08):** app EB `PAUTANUEVAsantino`, env
+> `PAUTANUEVAsantino-env`, SSM `/pautanuevasantino/prod/`. (La guía vieja decía
+> `PAUTANUEVAnardo`: era de OTRO proyecto, no usar.)
+>
+> ⚠️ **Tails borra todo al reiniciar.** El `clon-export.tar.gz` (Parte A) se
+> perdió una vez así (2026-09-08). Regla: Parte A y B3 (subir a S3 de la cuenta
+> nueva) **en la MISMA sesión, sin apagar la PC**. Una vez en S3, sobrevive.
+
+## ESTADO (actualizar acá cada vez que se avance)
+
+- [ ] A — export en la cuenta vieja (`clon-export.tar.gz` bajado)
+- [ ] B1 — rol `ec2-bootstrap` creado en la cuenta nueva
+- [ ] B2 — EC2 `bootstrap` corriendo (cuenta nueva habilitada para EC2)
+- [ ] B3 — tar.gz subido al bucket `clon-tmp-*`
+- [ ] C — etapas: [ ] iam · [ ] ssm · [ ] redis · [ ] cert · [ ] eb (Ready)
+- [ ] D — REDIS_URL · PUBLIC_BASE_URL · ADMIN_HOST · ALLOWED_ORIGINS en SSM
+- [ ] D — SG Redis 6379 · deploy ZIP · pruebas por URL EB · dominio · hgcash
+- [ ] D — limpieza (EC2, bucket, rol, archivo en la PC)
 
 ## PARTE A — Cuenta VIEJA (sacar la foto y chau)
 
 1. Entrá a la consola de la cuenta vieja → región **São Paulo (sa-east-1)**.
 2. Abrí **CloudShell** (ícono `>_` arriba a la derecha).
-3. **Anotá los dos nombres** (sin tocar nada): buscador de la consola →
+3. **Verificá los dos nombres** (sin tocar nada): buscador de la consola →
    **Elastic Beanstalk** → menú izquierdo **Environments** → buscá la fila cuya
    **URL** es `pauta.sa-east-1.elasticbeanstalk.com` (la misma del panel admin
    de ESTE proyecto). De esa fila anotá **Environment name** y **Application
-   name** tal cual están escritos.
+   name** tal cual están escritos. El SSM_PATH se ve en esa fila →
+   Configuration → Environment properties.
 4. Pegá (trae los scripts del repo, que es público):
    ```bash
-   git clone https://github.com/jupedro2112-pixel/PAUTANUEVAnardo.git
-   cd PAUTANUEVAnardo
+   git clone https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git
+   cd PAUTANUEVAsantino
    ```
 5. Exportá TODO (SSM + config del entorno). **Valores REALES verificados en la
    consola (2026-09-04):** Application `paginaaaacreada` · Environment
-   `pauprueba` · SSM_PATH `/pautomaticonar/prod/` (visto en Configuración →
-   propiedades del entorno; NO es el /nardo1girox/ que decía el plan viejo):
+   `pauprueba` · SSM_PATH `/pautomaticonar/prod/`:
    ```bash
    bash scripts/aws-export-config.sh /pautomaticonar/prod/ paginaaaacreada pauprueba
    ```
+   Tiene que decir `✅ Listo: clon-export.tar.gz` con ~20+ parámetros.
 6. Descargá el resultado: **Actions → Download file** → escribí
-   `PAUTANUEVAnardo/clon-export.tar.gz`. Queda en tu PC.
-   ⚠️ Ese archivo tiene TODOS los secretos. No lo subas a ningún repo ni lo
-   dejes dando vueltas: se usa en la Parte B y se borra.
-7. Listo con la cuenta vieja. Cerrá sesión. No se vuelve a tocar.
+   `PAUTANUEVAsantino/clon-export.tar.gz`. Queda en tu PC.
+   ⚠️ Ese archivo tiene TODOS los secretos. No lo subas a ningún repo.
+   ⚠️ Tails: seguí a la Parte B **ahora mismo**, sin reiniciar.
+7. Listo con la cuenta vieja. Cerrá sesión (el entorno viejo sigue andando
+   igual hasta que se mueva el dominio).
 
 ## PARTE B — Cuenta NUEVA, preparación (todo por consola web)
 
 > Consejo de separación: entrá a cada consola desde perfiles de navegador
 > DISTINTOS (o ventanas privadas separadas), no con las dos sesiones en las
 > mismas pestañas.
+
+**B0. Cuenta de cero**
+- Cuenta creada con tarjeta y verificación telefónica terminadas. Una cuenta
+  recién creada puede tardar **hasta 24-48 h** en habilitar EC2/CloudShell
+  ("account pending verification"). Si B2 falla por eso, esperar; mientras se
+  puede hacer B1 y B3 igual.
+- Región **sa-east-1** en todo (arriba a la derecha).
 
 **B1. Rol para la máquina de trabajo**
 1. IAM → Roles → **Create role**.
@@ -51,12 +79,11 @@
 4. Network settings: dejar default (Allow SSH puede quedar).
 5. **Advanced details** → IAM instance profile: **ec2-bootstrap**.
 6. Launch instance. Esperar "Running".
-   - Si falla con *"account pending verification"* → la cuenta aún no está
-     activada para EC2: esperar 24-48 h y reintentar (mismo bloqueo que CloudShell).
 
 **B3. El archivo (S3)**
 1. S3 → **Create bucket** → nombre único, ej. `clon-tmp-83942` (sa-east-1) → Create.
 2. Entrar al bucket → **Upload** → agregar `clon-export.tar.gz` desde tu PC → Upload.
+   Desde acá el archivo ya no depende de la PC.
 
 ## PARTE C — Construir (terminal en el navegador)
 
@@ -66,53 +93,69 @@
    ```bash
    export AWS_REGION=sa-east-1
    sudo dnf install -y git
-   git clone https://github.com/jupedro2112-pixel/PAUTANUEVAnardo.git
-   cd PAUTANUEVAnardo
+   git clone https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git
+   cd PAUTANUEVAsantino
    aws s3 cp s3://clon-tmp-83942/clon-export.tar.gz .
    tar xzf clon-export.tar.gz
    ```
 3. Etapas (una por vez, mirando que cada una termine bien):
    ```bash
    bash scripts/aws-bootstrap-clone.sh iam
-   bash scripts/aws-bootstrap-clone.sh ssm /pautanuevanardo/prod/
+   bash scripts/aws-bootstrap-clone.sh ssm /pautanuevasantino/prod/
    bash scripts/aws-bootstrap-clone.sh redis
    ```
-4. **Certificado** (solo si ya tenés el dominio nuevo decidido):
+4. **Certificado** (solo si ya tenés el dominio decidido):
    ```bash
    bash scripts/aws-bootstrap-clone.sh cert TUDOMINIO.com
    ```
    Te imprime un CNAME → pegalo en el DNS (Cloudflare, nube gris) → esperá
    que el status dé `ISSUED` (el propio output te deja el comando para chequear).
-5. **El entorno** (acá va el NOMBRE NUEVO — app `PAUTANUEVAnardo`):
+5. **El entorno:**
    ```bash
    export CERT_ARN=arn:aws:acm:...        # el ARN del paso 4; si no hay cert, salteá esta línea
-   bash scripts/aws-bootstrap-clone.sh eb PAUTANUEVAnardo PAUTANUEVAnardo-env /pautanuevanardo/prod/ https://TUDOMINIO.com
+   bash scripts/aws-bootstrap-clone.sh eb PAUTANUEVAsantino PAUTANUEVAsantino-env /pautanuevasantino/prod/ https://TUDOMINIO.com
    ```
    Sin `CERT_ARN`, el entorno se crea solo con HTTP (el HTTPS se agrega después
    desde la consola cuando el cert esté).
-6. Estado: `bash scripts/aws-bootstrap-clone.sh status PAUTANUEVAnardo-env`
-   (10-15 min hasta Ready).
+6. Estado: `bash scripts/aws-bootstrap-clone.sh status PAUTANUEVAsantino-env`
+   (10-15 min hasta Ready). Anotá la **URL** que imprime
+   (`xxxx.sa-east-1.elasticbeanstalk.com`): se usa en D.
 
 ## PARTE D — Terminar a mano (consola de la cuenta nueva)
 
 1. **Redis:** ElastiCache → `clon-redis-node` → copiar el endpoint.
-   SSM → Parameter Store → `/pautanuevanardo/prod/REDIS_URL` → Edit →
+   SSM → Parameter Store → `/pautanuevasantino/prod/REDIS_URL` → Edit →
    `rediss://<endpoint>:6379/0`.
 2. **PUBLIC_BASE_URL** en SSM → `https://TUDOMINIO.com`.
-3. **SNS:** no se activa (decisión owner). Dejar los parámetros de SMS en `off`
+3. **ADMIN_HOST** en SSM → la URL EB nueva (`xxxx.sa-east-1.elasticbeanstalk.com`,
+   sin https). Si queda la vieja, el panel admin responde 404 en el clon.
+4. **ALLOWED_ORIGINS** en SSM → `https://<url-eb-nueva>,https://TUDOMINIO.com,https://www.TUDOMINIO.com`.
+   Si queda la vieja, el front no puede llamar a la API (CORS).
+5. **SNS:** no se activa (decisión owner). Dejar los parámetros de SMS en `off`
    — el retiro no exige SMS (#225), nada se rompe.
-4. **Security group del Redis:** ElastiCache → SG del cluster → Inbound rule:
+6. **Security group del Redis:** ElastiCache → SG del cluster → Inbound rule:
    puerto 6379, origen = SG de las instancias del entorno nuevo.
-5. **Deploy:** EB → PAUTANUEVAnardo-env → **Upload and deploy** → el ZIP del
+7. **Reiniciar el entorno** (EB → Actions → Restart app servers) para que
+   tome los SSM editados — o directamente el deploy del paso siguiente.
+8. **Deploy:** EB → PAUTANUEVAsantino-env → **Upload and deploy** → el ZIP del
    repo de siempre.
-6. **Dominio:** Cloudflare → CNAME del dominio → el CNAME del entorno
-   (xxxx.sa-east-1.elasticbeanstalk.com). Y regla WAF Skip para
-   `/api/hgcash/webhook` si va proxied.
-7. **hgcash:** cambiar la URL del webhook a la nueva en su dashboard.
-8. **MongoDB Atlas:** si el allowlist no es 0.0.0.0/0, agregar las IPs nuevas.
-9. **LIMPIEZA:** terminar la instancia EC2 `bootstrap`, borrar el bucket
-   `clon-tmp-*`, borrar el rol `ec2-bootstrap`. Borrar `clon-export.tar.gz`
-   de tu PC.
+9. **Probar por la URL EB directa:** `/api/admin/girox/health`, login de un
+   usuario, panel `/adminprivado2026/` (con ADMIN_HOST nuevo), chat en vivo.
+10. **Dominio:** Cloudflare → CNAME del dominio → el CNAME del entorno nuevo.
+    Y regla WAF Skip para `/api/hgcash/webhook` si va proxied. Desde acá el
+    tráfico va al clon; el entorno viejo queda sin uso.
+11. **hgcash:** cambiar la URL del webhook a la nueva en su dashboard (si el
+    dominio es el mismo, no cambia nada).
+12. **MongoDB Atlas:** si el allowlist no es 0.0.0.0/0, agregar las IPs nuevas.
+13. **Firebase:** si el dominio es nuevo, agregarlo en Authorized domains.
+14. **LIMPIEZA:** terminar la instancia EC2 `bootstrap`, borrar el bucket
+    `clon-tmp-*`, borrar el rol `ec2-bootstrap`. Borrar `clon-export.tar.gz`
+    de tu PC. Apagar el entorno viejo recién cuando el nuevo lleve unos días OK.
+
+⚠️ **Mientras los DOS entornos apunten a la MISMA base Mongo** (misma
+`MONGODB_URI` importada) los crons corren en los dos — es seguro por los
+índices únicos, pero no los tengas semanas en paralelo: mové el dominio y
+después apagá el viejo.
 
 ## ¿Riesgo de que conecte las cuentas, así?
 

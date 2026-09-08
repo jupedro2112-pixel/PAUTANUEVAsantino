@@ -4,9 +4,27 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-09-07**
+> **Última actualización: 2026-09-08**
 
 ## Sesión 2026-09-08
+
+### 269. Clonación AWS a cuenta nueva: reinicio del proceso (el export se perdió con Tails) + guía corregida para ESTE repo
+- **Estado real:** el owner había corrido la Parte A (export de la cuenta vieja) y
+  bajado `clon-export.tar.gz`, pero **se perdió al reiniciar Tails**. Nada de la
+  cuenta nueva (de cero) está hecho. Se vuelve a empezar desde la Parte A.
+- **`docs/CLONACION-EC2.md` corregida:** la guía apuntaba al repo/app
+  `PAUTANUEVAnardo` (otro proyecto). Ahora clona `PAUTANUEVAsantino` y los
+  nombres nuevos son app `PAUTANUEVAsantino` / env `PAUTANUEVAsantino-env` /
+  SSM `/pautanuevasantino/prod/`. Se sumó: checklist de ESTADO al tope (para que
+  sobreviva a los reinicios), regla "Parte A y subir a S3 en la MISMA sesión",
+  B0 (cuenta nueva: EC2 puede tardar 24-48 h), y en la Parte D los SSM que
+  dependen de la URL EB nueva y faltaban: **`ADMIN_HOST`** (si queda el viejo el
+  panel da 404) y **`ALLOWED_ORIGINS`** (CORS), + restart para tomar los SSM,
+  prueba por URL EB antes de mover el dominio, y aviso de no tener los dos
+  entornos semanas en paralelo sobre la misma Mongo.
+- Sin cambios de código. Los scripts `aws-export-config.sh` /
+  `aws-bootstrap-clone.sh` sirven tal cual (sus comentarios de ejemplo siguen
+  diciendo nardo — es solo ejemplo).
 
 ### 268. Dashboard de Transacciones: la card "Reembolsos" daba $0 (el reembolso instantáneo se contaba como Bonificación)
 - **Pregunta owner:** "en reembolsos siempre aparece 0 y la gente sí reclama". Causa:
