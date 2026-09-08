@@ -53,6 +53,21 @@
 7. Listo con la cuenta vieja. Cerrá sesión (el entorno viejo sigue andando
    igual hasta que se mueva el dominio).
 
+## ATAJO — Si la cuenta nueva YA tiene CloudShell (2026-09-08: sí, cuenta `zamuxavier` 062472745735)
+
+Se saltean B1/B2/B3 y la Parte C corre en el CloudShell de la cuenta nueva:
+1. CloudShell (sa-east-1) → **Acciones → Cargar archivo** → `clon-export.tar.gz`.
+2. ```bash
+   export AWS_REGION=sa-east-1
+   git clone https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git
+   cd PAUTANUEVAsantino
+   mv ~/clon-export.tar.gz . && tar xzf clon-export.tar.gz && ls clon-export
+   ```
+3. Seguir con las etapas del paso 3 de la Parte C en adelante, y luego la Parte D.
+4. Limpieza: `rm ~/PAUTANUEVAsantino/clon-export.tar.gz` (no hay EC2/bucket/rol).
+
+La Parte B y el inicio de C quedan solo como plan B si CloudShell no estuviera.
+
 ## PARTE B — Cuenta NUEVA, preparación (todo por consola web)
 
 > Consejo de separación: entrá a cada consola desde perfiles de navegador
