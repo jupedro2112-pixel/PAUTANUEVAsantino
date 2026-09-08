@@ -18984,7 +18984,12 @@ app.post('/api/admin/roulette/:id/retry-credit', authMiddleware, adminMiddleware
     try {
       // MISMA reference que el giro original: si el premio ya se había acreditado y
       // sólo falló el registro local, este reintento no lo paga de nuevo.
-      credit = await girox.creditUserBalance(spin.username, spin.prizeARS, `vip-roulette-${spin.id}`);
+      // #266/#267: mismo camino que el giro original (BONO con el rollover del
+      // premio; misma reference → idempotente).
+      credit = await girox.creditGift(spin.username, spin.prizeARS, {
+        description: 'Ruleta diaria — premio en saldo (reintento)', reference: `vip-roulette-${spin.id}`,
+        rolloverX: Number(spin.rolloverX) || 0
+      });
     } catch (e) {
       credit = { success: false, error: e.message };
     }
@@ -18995,6 +19000,20 @@ app.post('/api/admin/roulette/:id/retry-credit', authMiddleware, adminMiddleware
       );
       return res.status(503).json({ error: (credit && credit.error) || 'Error acreditando' });
     }
+    // Registro en Transacciones (si el giro original no lo dejó).
+    try {
+      const yaTx = await Transaction.findOne({ 'metadata.source': 'daily_roulette', 'metadata.spinId': spin.id }).select('id').lean();
+      if (!yaTx) {
+        await Transaction.create({
+          id: uuidv4(), type: 'bonus', userId: spin.userId, username: spin.username, amount: Number(spin.prizeARS),
+          description: `Ruleta diaria — premio en saldo (${spin.prizeLabel || spin.prizeARS})${spin.rolloverX ? ` · rollover x${spin.rolloverX}` : ''}`,
+          adminUsername: req.user.username || 'admin', adminRole: req.user.role || 'admin',
+          transactionId: credit.data?.transfer_id || credit.data?.transferId || null,
+          metadata: { source: 'daily_roulette', spinId: spin.id, rolloverX: Number(spin.rolloverX) || 0, via: credit.via || null, retry: true },
+          timestamp: new Date()
+        });
+      }
+    } catch (_) {}
     // FIX: antes leía `credit.transactionId || credit.transferId`, campos que el
     // cliente NUNCA devolvió en la raíz (siempre vienen dentro de `data`) → el
     // creditTxId de todos los giros se guardaba en null. Ahora se lee bien.
