@@ -6,6 +6,18 @@
 >
 > **Última actualización: 2026-09-07**
 
+## Sesión 2026-09-08
+
+### 268. Dashboard de Transacciones: la card "Reembolsos" daba $0 (el reembolso instantáneo se contaba como Bonificación)
+- **Pregunta owner:** "en reembolsos siempre aparece 0 y la gente sí reclama". Causa:
+  el reembolso instantáneo (cashback) se guarda como `type:'bonus'` con
+  `metadata.source:'instant_cashback'` → sumaba en "Bonificaciones"; la card
+  "Reembolsos" solo contaba `type:'refund'` (semanal/mensual, que ya nadie usa).
+- **Fix (`GET /api/admin/transactions`):** el resumen agrupa por tipo + si es cashback:
+  Reembolsos = refund + cashback; Bonificaciones = bonus sin cashback. El filtro
+  "Reembolsos" lista ambos; el filtro "Bonificaciones" excluye el cashback. Sin
+  migración de datos (queries, no cambio de tipo). El panel no cambió.
+
 ## Sesión 2026-09-07
 
 ### 267. Transacciones del panel: la RULETA DIARIA no dejaba registro (ni se descontaba del reembolso) + origen visible por fila

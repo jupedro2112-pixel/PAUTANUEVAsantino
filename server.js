@@ -15129,27 +15129,41 @@ app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, 
 
     // listQuery = baseQuery + tipo (filtra SOLO la tabla, no el resumen).
     const listQuery = { ...baseQuery };
+    // #268: el REEMBOLSO instantáneo (cashback, #254/#256f) se guarda como
+    // type 'bonus' + metadata.source 'instant_cashback'. Para el panel ES un
+    // reembolso: la card y el filtro "Reembolsos" lo incluyen (y la card
+    // "Bonificaciones" lo excluye) — antes Reembolsos daba $0 aunque la gente
+    // reclamara todos los días.
+    const CASHBACK_MATCH = { type: 'bonus', 'metadata.source': 'instant_cashback' };
     if (type && type !== 'all') {
       // Castear a String: sin esto un objeto ({"$ne":"x"}) se colaba como
       // operador NoSQL en el query.
-      listQuery.type = String(type);
+      const t = String(type);
+      if (t === 'refund') listQuery.$or = [{ type: 'refund' }, CASHBACK_MATCH];
+      else if (t === 'bonus') { listQuery.type = 'bonus'; listQuery['metadata.source'] = { $ne: 'instant_cashback' }; }
+      else listQuery.type = t;
     }
 
     // Resumen por tipo vía aggregation sobre baseQuery (rápido, no trae documentos).
     const sumAgg = await Transaction.aggregate([
       { $match: baseQuery },
-      { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }
+      { $group: {
+        _id: { type: '$type', cb: { $eq: [{ $ifNull: ['$metadata.source', ''] }, 'instant_cashback'] } },
+        total: { $sum: '$amount' }, count: { $sum: 1 }
+      } }
     ]);
     let deposits = 0, withdrawals = 0, bonuses = 0, refunds = 0, fireRewards = 0, referrals = 0, totalAll = 0;
     for (const g of sumAgg) {
       totalAll += g.count;
-      switch (g._id) {
-        case 'deposit': deposits = g.total; break;
-        case 'withdrawal': withdrawals = g.total; break;
-        case 'bonus': bonuses = g.total; break;
-        case 'refund': refunds = g.total; break;
-        case 'fire_reward': fireRewards = g.total; break;
-        case 'referral_commission': referrals = g.total; break;
+      const ty = g._id && g._id.type;
+      const esCashback = !!(g._id && g._id.cb);
+      switch (ty) {
+        case 'deposit': deposits += g.total; break;
+        case 'withdrawal': withdrawals += g.total; break;
+        case 'bonus': if (esCashback) refunds += g.total; else bonuses += g.total; break;
+        case 'refund': refunds += g.total; break;
+        case 'fire_reward': fireRewards += g.total; break;
+        case 'referral_commission': referrals += g.total; break;
       }
     }
 
