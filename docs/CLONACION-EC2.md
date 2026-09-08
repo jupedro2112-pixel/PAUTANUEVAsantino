@@ -19,8 +19,8 @@
 - [ ] B1 — rol `ec2-bootstrap` creado en la cuenta nueva
 - [ ] B2 — EC2 `bootstrap` corriendo (cuenta nueva habilitada para EC2)
 - [ ] B3 — tar.gz subido al bucket `clon-tmp-*`
-- [ ] C — etapas: [x] iam · [x] ssm (35 → `/pautanuevasantino/prod/`, **AWS_ACCESS_KEY_ID/SECRET borrados** — eran de la cuenta vieja) · [x] redis (`clon-redis` creado 2026-09-08 **SIN TLS** — el pegado se cortó y quedó sin `--transit-encryption-enabled`; se dejó así: REDIS_URL va con `redis://`, no `rediss://`) · [ ] cert · [ ] eb (Ready)
-- [ ] D — REDIS_URL · PUBLIC_BASE_URL · ADMIN_HOST · ALLOWED_ORIGINS en SSM
+- [ ] C — etapas: [x] iam · [x] ssm (35 → `/pautanuevasantino/prod/`, **AWS_ACCESS_KEY_ID/SECRET borrados** — eran de la cuenta vieja) · [x] redis (`clon-redis` creado 2026-09-08 **SIN TLS** — el pegado se cortó y quedó sin `--transit-encryption-enabled`; se dejó así: REDIS_URL va con `redis://`, no `rediss://`) · [ ] cert (queda para después, dominio nuevo a definir) · [x] eb (`PAUTANUEVAsantino-env` Launching 2026-09-08 19:05 UTC, HTTP sin cert)
+- [ ] D — REDIS_URL (endpoint `clon-redis.fesp3c.ng.0001.sae1.cache.amazonaws.com`, sin TLS) · PUBLIC_BASE_URL · ADMIN_HOST · ALLOWED_ORIGINS en SSM
 - [ ] D — SG Redis 6379 · deploy ZIP · pruebas por URL EB · dominio · hgcash
 - [ ] D — limpieza (EC2, bucket, rol, archivo en la PC)
 
