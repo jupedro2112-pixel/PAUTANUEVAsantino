@@ -2681,7 +2681,14 @@ VIP.ui.openRewardsHub = function() {
       body = '<div style="font-size:13px;color:#cfd6de;line-height:1.4;">📲 El giro diario se activa con la <b>app instalada y las notificaciones aceptadas</b>.</div>';
       // Guía PROPIA del hub (#256c): la vieja (installApp) dibujaba su cartel
       // DEBAJO del overlay del casino y no se veía nada.
-      cta = _rwCta('📲 Instalar la app — ver cómo', 'VIP.ui._rwShowInstallGuide()', true, '#26e07f');
+      // #272: si la app ya está instalada y SOLO faltan las notificaciones, el
+      // CTA es la campana (un toque → cartel Permitir), sin pasar por la guía.
+      let _inst = false, _perm = 'default';
+      try { _inst = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; } catch (e) {}
+      try { _perm = Notification.permission; } catch (e) {}
+      cta = (_inst && _perm === 'default')
+        ? _rwCta('🔔 Activar notificaciones (1 toque)', 'VIP.ui._rwShowInstallGuide();VIP.ui._rwEnableNotifs(document.getElementById(\'rwBellBtn\'))', true, '#53bdeb')
+        : _rwCta('📲 Instalar la app — ver cómo', 'VIP.ui._rwShowInstallGuide()', true, '#26e07f');
     } else {
       body = '<div style="font-size:13px;color:#cfd6de;">La ruleta diaria no está disponible para tu cuenta todavía.</div>';
     }
@@ -3005,14 +3012,14 @@ VIP.ui._rwShowInstallGuide = function() {
       step(2, 'Bajá en la lista y tocá <b>"Agregar a inicio"</b> (Add to Home Screen) → <b>Agregar</b>.') +
       step(3, 'Cerrá Safari y abrí la app desde el <b>ícono nuevo</b> en tu pantalla de inicio.') +
       step(4, 'La app te va a pedir iniciar sesión: <b>entrá con tus datos de acá abajo</b> 👇') +
-      step(5, 'Cuando la app te pregunte, tocá <b>"Permitir notificaciones"</b>. 🔔');
+      step(5, 'Dentro de la app, tocá el botón <b>🔔 ACTIVAR NOTIFICACIONES</b> de abajo y elegí <b>"Permitir"</b>.');
   } else {
     steps =
       step(1, 'Tocá el <b>menú ⋮</b> de Chrome (arriba a la derecha).') +
       step(2, 'Tocá <b>"Instalar app"</b> o <b>"Agregar a la pantalla principal"</b> → <b>Instalar</b>.') +
       step(3, 'Abrí la app desde el <b>ícono nuevo</b> en tu pantalla de inicio.') +
       step(4, 'Si te pide iniciar sesión, <b>entrá con tus datos de acá abajo</b> 👇') +
-      step(5, 'Cuando te pregunte, tocá <b>"Permitir notificaciones"</b>. 🔔');
+      step(5, 'Tocá el botón <b>🔔 ACTIVAR NOTIFICACIONES</b> de abajo y elegí <b>"Permitir"</b>.');
   }
   // 🪪 Datos de ingreso DENTRO de la guía (#256e): al abrir la app instalada
   // suele pedir login (sobre todo iPhone) → usuario + clave a mano, con copiar.
@@ -3054,6 +3061,37 @@ VIP.ui._rwShowInstallGuide = function() {
     ? '<button type="button" onclick="VIP.ui._rwNativeInstall()" style="width:100%;margin-bottom:8px;border:none;cursor:pointer;' +
       'background:linear-gradient(135deg,#26e07f,#0f9d58);color:#00301a;border-radius:13px;padding:14px;font-size:16px;font-weight:900;">📲 INSTALAR AHORA (1 toque)</button>'
     : '';
+  // 🔔 CAMPANA (#272, owner: "que la gente no tenga que ir a ajustes"): un
+  // toque dispara el cartel nativo Permitir / No permitir. Tres estados:
+  //  - default  → botón grande; requestPermission() se llama DENTRO del gesto.
+  //  - denied   → el navegador ya no vuelve a preguntar: el botón despliega
+  //               cómo desbloquearlo (es el único caso que requiere ajustes).
+  //  - iOS sin app instalada → Safari no da push: se avisa que primero instale.
+  let permState = 'default';
+  try { permState = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported'; } catch (e) {}
+  let bellBtn = '';
+  if (!notifOk) {
+    if (isIOS && !installed) {
+      bellBtn = '<div style="font-size:12px;color:#ffd700;background:rgba(255,215,0,0.08);border:1px solid #ffd70044;border-radius:11px;' +
+        'padding:9px 12px;margin-bottom:8px;">🔔 En iPhone las notificaciones se activan <b>desde la app instalada</b> (pasos 1-3). Ahí vas a ver este botón.</div>';
+    } else if (permState === 'denied') {
+      bellBtn = '<button type="button" onclick="VIP.ui._rwToggleNotifHelp()" style="width:100%;margin-bottom:8px;border:none;cursor:pointer;' +
+        'background:linear-gradient(135deg,#ff8a80,#e53935);color:#fff;border-radius:13px;padding:14px;font-size:15px;font-weight:900;">🔔 Notificaciones BLOQUEADAS — cómo activarlas</button>' +
+        '<div id="rwNotifHelp" style="display:none;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:13px;padding:12px 14px;margin-bottom:8px;font-size:12.5px;color:#cfd6de;line-height:1.5;">' +
+        (isIOS
+          ? '<b style="color:#fff;">iPhone:</b> Ajustes del teléfono → <b>Notificaciones</b> → buscá la app en la lista → <b>Permitir notificaciones</b>. Después volvé acá y tocá "Ya lo hice".'
+          : '<b style="color:#fff;">Android:</b><br>• Si estás en <b>Chrome</b>: tocá el <b>candado 🔒</b> (o ⓘ) al lado de la dirección → <b>Permisos</b> → <b>Notificaciones</b> → Permitir.<br>' +
+            '• Si estás en la <b>app instalada</b>: mantené apretado el ícono de la app → <b>Información de la app</b> → <b>Notificaciones</b> → activar.<br>Después volvé acá y tocá "Ya lo hice".') +
+        '</div>';
+    } else if (permState === 'unsupported') {
+      bellBtn = '<div style="font-size:12px;color:#ff8a80;margin-bottom:8px;">⚠️ Este navegador no soporta notificaciones. Usá Chrome (Android) o la app instalada (iPhone).</div>';
+    } else {
+      bellBtn = '<button type="button" id="rwBellBtn" onclick="VIP.ui._rwEnableNotifs(this)" style="width:100%;margin-bottom:8px;border:none;cursor:pointer;' +
+        'background:linear-gradient(135deg,#53bdeb,#1e96d6);color:#fff;border-radius:13px;padding:14px;font-size:16px;font-weight:900;' +
+        'box-shadow:0 0 14px rgba(42,171,238,0.45);">🔔 ACTIVAR NOTIFICACIONES (1 toque)</button>' +
+        '<div style="font-size:11px;color:#9aa4b0;margin:-2px 0 10px;text-align:center;">Te va a aparecer un cartel: tocá <b style="color:#fff;">Permitir</b>.</div>';
+    }
+  }
   const ov = document.createElement('div');
   ov.id = 'rwInstallOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483100;display:flex;flex-direction:column;align-items:center;' +
@@ -3076,6 +3114,7 @@ VIP.ui._rwShowInstallGuide = function() {
       '<div style="background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:14px 14px 6px;margin:8px 0 12px;">' + steps + '</div>' +
       credsBox +
       nativeBtn +
+      bellBtn +
       '<button type="button" onclick="VIP.ui._rwShowInstallGuide()" style="width:100%;margin-bottom:8px;border:none;cursor:pointer;' +
         'background:linear-gradient(135deg,#ffd700,#ff9800);color:#231a00;border-radius:13px;padding:13px;font-size:15px;font-weight:900;">🔄 Ya lo hice — verificar</button>' +
       '<button type="button" onclick="VIP.ui._rwSupportCantInstall()" style="width:100%;border:none;cursor:pointer;' +
@@ -3091,6 +3130,34 @@ VIP.ui._rwCloseInstallGuide = function(backToHub) {
   const ov = document.getElementById('rwInstallOverlay');
   if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
   if (backToHub) { try { VIP.ui.openRewardsHub(); } catch (e) {} }
+};
+// Campana: pide el permiso DENTRO del gesto (iOS lo exige y Chrome pierde la
+// "activación" si antes esperamos a Firebase), y recién después delega en
+// window.enableNotifications() (inline de index.html: token FCM + registro en
+// el backend + toasts). Al final re-pinta la guía para que el check quede ✅.
+VIP.ui._rwEnableNotifs = async function(btn) {
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Tocá "Permitir" en el cartel…'; }
+    let perm = 'default';
+    try { perm = Notification.permission; } catch (e) {}
+    if (perm === 'default') {
+      try { perm = await Notification.requestPermission(); } catch (e) { perm = Notification.permission; }
+    }
+    if (perm === 'granted') {
+      if (btn) btn.textContent = '⏳ Activando…';
+      try { if (typeof window.enableNotifications === 'function') await window.enableNotifications(); } catch (e) {}
+    } else if (perm === 'denied') {
+      try { VIP.ui.showToast('Tocaste "No permitir". Abajo te mostramos cómo activarlas.', 'warning'); } catch (e) {}
+    }
+  } catch (e) {}
+  // Re-render: muestra ✅ o, si quedó bloqueado, el botón rojo con la ayuda.
+  VIP.ui._rwShowInstallGuide();
+  try { if (Notification.permission === 'denied') VIP.ui._rwToggleNotifHelp(true); } catch (e) {}
+};
+VIP.ui._rwToggleNotifHelp = function(force) {
+  const h = document.getElementById('rwNotifHelp');
+  if (!h) return;
+  h.style.display = (force === true || h.style.display === 'none') ? 'block' : 'none';
 };
 VIP.ui._rwNativeInstall = async function() {
   try {

@@ -8,6 +8,33 @@
 
 ## Sesión 2026-09-09
 
+### 272. Campana 🔔 "ACTIVAR NOTIFICACIONES" (1 toque → cartel Permitir) en la guía de instalación
+- **Pedido owner:** la gente no sabe activar las notificaciones; decirles "andá a
+  ajustes → app → notificaciones" es lento y muchos no lo entienden. Quiere un botón
+  tipo campana que dispare el cartel Permitir / No permitir.
+- **Sí es posible** (Notification API): el navegador muestra el cartel nativo si se
+  pide DENTRO de un gesto del usuario y el permiso está en `default`. Límites reales:
+  (a) si ya tocaron "No permitir" (`denied`) el navegador NO vuelve a preguntar — ahí
+  sí hay que ir a ajustes; (b) iPhone solo permite push desde la app instalada.
+- **Implementado (ui.js, guía `_rwShowInstallGuide`):** botón celeste **"🔔 ACTIVAR
+  NOTIFICACIONES (1 toque)"** (`VIP.ui._rwEnableNotifs`): llama
+  `Notification.requestPermission()` PRIMERO, dentro del click (iOS lo exige y Chrome
+  pierde la activación si antes se espera a Firebase), y con `granted` delega en
+  `window.enableNotifications()` (inline de index.html: token FCM + `register-token`
+  + toasts). Después re-pinta la guía → check "Notificaciones aceptadas" ✅. Estados:
+  `denied` → botón rojo "BLOQUEADAS — cómo activarlas" que despliega instrucciones
+  por plataforma (Chrome: candado → Permisos → Notificaciones; app instalada:
+  mantener el ícono → Información → Notificaciones; iPhone: Ajustes →
+  Notificaciones → la app); iOS sin instalar → aviso "se activa desde la app
+  instalada"; sin soporte → aviso. Paso 5 de la guía ahora apunta al botón.
+  **Hub PREMIOS:** en la card de la ruleta diaria, si la app YA está instalada y solo
+  faltan las notificaciones, el CTA pasa a ser la campana directa (abre la guía y
+  dispara el cartel en el mismo toque).
+- **Validado:** `node --check` OK. **SW → v160.** Solo front. PROBAR (Android Chrome,
+  usuario nuevo): PREMIOS → Ruleta diaria → "Instalar la app" → 🔔 → cartel nativo →
+  Permitir → check verde + toast "Notificaciones activadas"; tocar "No permitir" →
+  botón rojo con la ayuda.
+
 ### 271. Runbook DEFINITIVO de clonación a otra cuenta AWS (`docs/CLONACION-PASO-A-PASO.txt`) + script con etapas nuevas
 - **Pedido owner:** "voy a comprar otro Amazon y quiero hacer lo mismo sin errores":
   un .txt con TODO el paso a paso desde CloudShell, con lo que sirvió y sin lo que
