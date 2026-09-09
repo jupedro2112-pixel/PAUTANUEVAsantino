@@ -10,6 +10,37 @@ HTTPS, sin ninguna conexión técnica con la cuenta anterior.
 Tiempo real: ~60-75 min, casi todo espera (cert, entorno, deploy).
 
 ---------------------------------------------------------------------
+PARA LA IA QUE ASISTE (leer primero)
+---------------------------------------------------------------------
+- Qué es el proyecto: backend Node/Express + PWA "VIPCARGAS/1GIROX" (sala de
+  juegos) desplegado en AWS Elastic Beanstalk (sa-east-1), secretos en SSM
+  Parameter Store (la app los lee al arrancar por la env SSM_PATH), Redis
+  ElastiCache para Socket.IO multi-instancia, MongoDB Atlas externo. El repo
+  es público en GitHub; los scripts de clonación viven en scripts/.
+- El owner opera desde Tails (Tor) y pega comandos en AWS CloudShell. NO
+  puede correr nada local salvo `node --check`. Vos le das comandos de a UNO,
+  cortos, y él te pega capturas/outputs. Le pedís el output de cada paso
+  antes de dar el siguiente.
+- Este .txt es el plan. El código de cada etapa está en
+  scripts/aws-bootstrap-clone.sh (case por etapa: iam/ssm/redis/redis-url/
+  cert/eb/sg/https/deploy/status) y scripts/aws-export-config.sh. Antes de
+  arrancar, leelos: si el owner reporta un error, la corrección va AHÍ (se
+  commitea, se pushea, y el owner hace `git pull` en CloudShell).
+- Todo lo que se hace queda en AWS; lo único volátil son las variables de la
+  terminal de CloudShell (se reinicia sola cada ~20 min de inactividad).
+- Al terminar (o al cortar la sesión), dejá el progreso escrito en el repo
+  (WORKLOG.md + este archivo si algo cambió) y pusheá: Tails borra lo local.
+- Bitácora de la clonación anterior con capturas del razonamiento:
+  docs/CLONACION-EC2.md y WORKLOG.md #269/#271.
+
+CHECKLIST (la IA lo va tildando en el WORKLOG a medida que el owner avanza):
+  [ ] 1 export en la vieja + archivo bajado      [ ] 6 sg + redis-url + 4 SSM de hosts
+  [ ] 2 archivo subido a la nueva + ls OK        [ ] 7 deploy + curl 200
+  [ ] 3 cert pedido + 3 CNAME en Cloudflare      [ ] 8 cert ISSUED + https + DNS + panel loguea
+  [ ] 4 iam + ssm + redis                        [ ] 9 hgcash + Firebase + Atlas + limpieza
+  [ ] 5 eb Ready + EBURL anotada                 [ ] 12 verificación final (logs)
+
+---------------------------------------------------------------------
 0. REGLAS QUE EVITAN TODOS LOS ERRORES QUE TUVIMOS
 ---------------------------------------------------------------------
 R1. Tails borra TODO al reiniciar. Bajá el archivo de la cuenta vieja y
@@ -30,12 +61,18 @@ R7. Región siempre sa-east-1 (São Paulo), en las dos cuentas y en todo.
 R8. Navegadores/ventanas separadas para cada consola AWS. No las dos
     sesiones en las mismas pestañas.
 
-Variables que vas a usar (elegilas antes de empezar y anotalas):
+Variables que vas a usar (elegilas antes de empezar y anotalas). En TODO el
+documento, donde dice APP/ENV/SSMPATH/DOMINIO/EBURL/REPO va el valor real:
   APP      = nombre de la app EB nueva      ej: PAUTANUEVAsantino
   ENV      = nombre del entorno             ej: PAUTANUEVAsantino-env  (=APP + "-env")
   SSMPATH  = path SSM nuevo                 ej: /pautanuevasantino/prod/  (minúsculas, con / al final)
   DOMINIO  = dominio nuevo, ya en Cloudflare ej: auto1girox.com
   REPO     = https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git
+  CARPETA  = nombre de la carpeta que crea git clone (= nombre del repo)
+             ej: PAUTANUEVAsantino. Si el proyecto es OTRO repo, cambia acá y
+             en todos los "cd ~/PAUTANUEVAsantino" de abajo.
+  EBURL    = la URL .elasticbeanstalk.com que devuelve el paso 5.2 (se conoce recién ahí)
+  ARN      = el ARN del certificado que devuelve el paso 3.1
 De la cuenta VIEJA (verificalas en la consola vieja → Elastic Beanstalk →
 Environments → la fila del proyecto → Configuration → Environment properties):
   APP_VIEJA / ENV_VIEJA / SSMPATH_VIEJO   (2026-09-08 eran: paginaaaacreada /
@@ -60,6 +97,9 @@ Environments → la fila del proyecto → Configuration → Environment properti
 ---------------------------------------------------------------------
 2.1 Consola nueva (cuenta ya creada, tarjeta OK) → región sa-east-1 → CloudShell.
     Si CloudShell no abre ("account pending verification"): esperar 24-48 h.
+    Si pasadas 48 h sigue sin CloudShell: plan B = EC2 t3.micro con rol
+    AdministratorAccess + archivo por S3 (Parte B/C de docs/CLONACION-EC2.md);
+    los comandos de este .txt son los mismos desde esa terminal.
 2.2 Acciones → Cargar archivo → clon-export.tar.gz (queda en /home/cloudshell-user).
 2.3 Pegar (una por vez):
       git clone REPO
@@ -207,3 +247,65 @@ Estado del entorno:  bash scripts/aws-bootstrap-clone.sh status ENV
 - Poner ADMIN_HOST = URL EB con HTTPS: el cert es del dominio, no de
   elasticbeanstalk.com → advertencia del navegador. Por eso panel.DOMINIO va
   en el cert (SAN) y en ADMIN_HOST.
+
+---------------------------------------------------------------------
+12. VERIFICACIÓN FINAL (que quedó IGUAL que el original)
+---------------------------------------------------------------------
+12.1 Log de arranque de la app (dos comandos, el segundo devuelve un link a S3
+     que se abre en el navegador):
+      aws elasticbeanstalk request-environment-info --environment-name ENV --info-type tail --region sa-east-1
+      sleep 25; aws elasticbeanstalk retrieve-environment-info --environment-name ENV --info-type tail --region sa-east-1 --query 'EnvironmentInfo[-1].Message' --output text
+     En el log (web.stdout.log) tienen que aparecer:
+      "[SSM] Cargados 33 parámetros desde SSMPATH"   (33 = 35 del viejo − 2 keys AWS)
+      "MongoDB conectado" (o similar, sin errores de Mongo)
+      "Socket.IO Redis adapter initialized — multi-instance mode active"
+     Si dice "Failed to initialize Redis adapter": revisar 6.1 (sg) y 6.3 (REDIS_URL)
+     y hacer restart-app-server.
+12.2 Panel: https://panel.DOMINIO/adminprivado2026/ → login → abrir un chat →
+     ver saldo de un usuario (prueba Mongo + 1girox) → Configuración → girox
+     health: GET /api/admin/girox/health (desde el panel logueado) tiene que dar OK.
+12.3 PWA: https://DOMINIO/ → registrar o loguear un usuario → entrar al casino
+     (SSO) → widget ⚡ → "¿Cómo funciona?" y "📣 Comunidad" abren.
+12.4 Carga automática: hacer una transferencia de prueba con comprobante →
+     tiene que acreditar sola (webhook hgcash apuntando al dominio nuevo, 9.1).
+12.5 Push: desde el panel mandar una notificación de prueba a un usuario con la
+     PWA instalada (Firebase con el dominio autorizado, 9.2).
+12.6 Comparar Configuration del entorno nuevo vs viejo en la consola: capacidad
+     (min 2 / max 8, t3.medium), stickiness del load balancer ON (Socket.IO lo
+     necesita), listeners 80 y 443. El export copia todo eso; solo confirmar.
+
+---------------------------------------------------------------------
+13. ERRORES CONOCIDOS → SOLUCIÓN
+---------------------------------------------------------------------
+- "Encryption feature is not supported for engine REDIS" → es create-cache-cluster;
+  el script ya usa create-replication-group (etapa redis). Si aparece, git pull.
+- "ConfigurationValidationException ... Invalid option specification (Namespace:
+  X, OptionName: Y)" en el eb → un option-setting del entorno viejo apunta a un
+  recurso/rol de la cuenta vieja. Agregar ese Namespace/OptionName al filtro
+  `foreign()` de la etapa eb en scripts/aws-bootstrap-clone.sh, commit, push,
+  `git pull`, repetir el eb (dice "app ya existe": normal).
+- "CacheClusterNotFound" / SecurityGroups None en el Redis → el nodo se creó sin
+  SG explícito. `aws elasticache modify-replication-group --replication-group-id
+  clon-redis --security-group-ids <SG default> --apply-immediately --region sa-east-1`
+  (la etapa redis actual ya lo pasa al crear).
+- "Error parsing parameter '--option-settings': Invalid JSON" → JSON pegado por
+  heredoc perdió una coma. Usar la etapa https (printf).
+- Prompt "> " después de pegar → la línea se cortó. Ctrl+C y pegar más corto.
+- "command not found" con el nombre de un flag (--num-cache-clusters...) → mitad
+  de una línea cortada se ejecutó sola; revisar qué se creó a medias
+  (describe-*) antes de repetir.
+- Navegador "No se puede conectar" en https://EBURL → no hay listener 443 todavía
+  (paso 8.2) o Tor Browser fuerza HTTPS. Para pruebas previas al cert usar
+  http:// (la PWA carga; el panel NO loguea por HTTP, es normal).
+- Panel "Not found" en https://panel.DOMINIO → ADMIN_HOST no coincide o la app no
+  reinició tras cambiar el SSM. Verificar:
+  aws ssm get-parameter --name SSMPATH/ADMIN_HOST --with-decryption --region sa-east-1 --query Parameter.Value --output text
+  y restart-app-server.
+- CORS en la PWA (peticiones bloqueadas) → ALLOWED_ORIGINS sin el dominio/www.
+- git push falla desde Tails con "Could not resolve host" → corte de DNS de Tor,
+  reintentar en unos segundos.
+- CloudShell "vacío" al volver → sesión reiniciada; repetir 2.3 (cd + export) y
+  recuperar ARN con 3.3. Nada de AWS se perdió.
+- Un usuario con la PWA instalada no ve un cambio del front → el service worker
+  sirve el JS viejo una carga más (stale-while-revalidate): abrir la app dos
+  veces; en iPhone, si persiste, borrar y reinstalar desde Safari.
