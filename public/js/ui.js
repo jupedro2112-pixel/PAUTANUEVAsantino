@@ -1280,6 +1280,23 @@ VIP.ui._casinoFrameStuck = function() {
 // quedaron sin ningún caller al reemplazar ese pop-up por el asistente/bot
 // (casinoBotGo). Código muerto verificado (0 referencias). Ver WORKLOG #234.
 
+/** Botón 📣 Comunidad del widget del casino (#270): visible SOLO si el panel
+ *  tiene cargada la URL del canal (chat.js la deja en VIP.state al cargar la
+ *  config y llama a esto; también se llama al crear el overlay). Sin URL, la
+ *  fila queda oculta — no hay botón que lleve a ningún lado. */
+VIP.ui._applyCasinoCommunity = function() {
+  const row = document.getElementById('casinoCommunityRow');
+  const a = document.getElementById('casinoCommunityBtn');
+  if (!row || !a) return;
+  const url = (VIP.state && VIP.state.communityChannelUrl) || '';
+  if (/^https?:\/\//i.test(url)) {
+    a.href = url;
+    row.style.display = 'flex';
+  } else {
+    row.style.display = 'none';
+  }
+};
+
 /** Crea (una sola vez) y muestra el recuadro del casino. */
 VIP.ui._showCasinoFrame = function() {
   let overlay = document.getElementById('casinoOverlay');
@@ -1417,6 +1434,18 @@ VIP.ui._showCasinoFrame = function() {
           '<button type="button" class="cwSop" onclick="VIP.ui.casinoBotGo(\'info\')" style="flex:1;' +
           'border-radius:9px;padding:8px 4px;font-size:11.5px;font-weight:800;cursor:pointer;">ℹ️ ¿Cómo funciona?</button>' +
         '</div>' +
+        // 3ª fila: 📣 COMUNIDAD de Telegram (#270). En el formato casino el pill
+        // celeste del header y el ítem del menú ☰ quedan tapados por el overlay,
+        // así que el link del canal (panel → Comandos → "Comunidad / Canal de
+        // Telegram") se muestra ACÁ. Oculto hasta que haya URL configurada
+        // (VIP.state.communityChannelUrl, la setea chat.js al cargar la config).
+        '<div class="cwBar" id="casinoCommunityRow" style="flex:0 0 auto;display:none;padding:0 8px 8px;">' +
+          '<a id="casinoCommunityBtn" href="/go/comunidad" target="_blank" rel="noopener noreferrer" ' +
+          'title="Unite a la Comunidad de Telegram" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;' +
+          'background:linear-gradient(135deg,#37b2f0,#1e96d6);color:#fff;text-decoration:none;border-radius:9px;' +
+          'padding:8px 6px;font-size:11.5px;font-weight:900;box-shadow:0 0 10px rgba(42,171,238,0.45);">' +
+          '📣 Unite a la Comunidad de Telegram</a>' +
+        '</div>' +
         // ASISTENTE (bot) — modo DEFAULT del widget: flujo guiado de depósito
         // (datos + copiar + comprobante) y retiro EN el panel. Look tipo
         // WhatsApp (claro u oscuro según wa-dark). Chat humano = FALLBACK.
@@ -1440,6 +1469,8 @@ VIP.ui._showCasinoFrame = function() {
     // Burbuja ARRASTRABLE con imán al borde (owner 2026-08-25): el cliente la
     // puede mover si le tapa el juego. Se engancha UNA vez (el overlay se cachea).
     try { VIP.ui._makeBubbleDraggable(); } catch (e) {}
+    // Si la config de Comunidad ya llegó antes de crear el widget, pintarla ahora.
+    try { VIP.ui._applyCasinoCommunity(); } catch (e) {}
 
     // Cuando el casino termina de cargar, se esconde el "cargando" y se muestra el juego.
     const frame = overlay.querySelector('#casinoFrame');

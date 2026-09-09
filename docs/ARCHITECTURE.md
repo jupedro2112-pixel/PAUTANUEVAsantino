@@ -814,6 +814,13 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
 - Server-side rendering mínimo: `renderIndexHtml` reemplaza placeholders
   (`__META_PIXEL_ID_PLACEHOLDER__`, `__VIP_PUBLIC_BASE_URL_PLACEHOLDER__`,
   `__VIP_CAMPAIGN_CODE_PLACEHOLDER__`) con cache en memoria por proceso.
+- **Comunidad de Telegram (link del canal):** se configura en panel → Comandos →
+  card "📣 Comunidad / Canal de Telegram" (`communityConfig.channelUrl`; lectura
+  `GET /api/config/community` + redirect `GET /go/comunidad`). En el front lo aplica
+  `chat.js._applyCanalUrl` a TRES lugares: pill del header + ítem del menú ☰ (dashboard
+  viejo, tapado por el casino) y, desde #270, la fila **"📣 Unite a la Comunidad"**
+  del widget "Cargas Automáticas" (`#casinoCommunityRow`, ui.js
+  `_applyCasinoCommunity`, visible solo con URL cargada — `VIP.state.communityChannelUrl`).
 - **Botón CASINO** (`#plataformaBtn` → `VIP.ui.enterCasino()`): login único contra
   1girox. Ver la trampa del pop-up blocker en §4.9. El modal de acceso manual sigue
   existiendo, pero **sólo como camino de respaldo** cuando el SSO falla.

@@ -678,6 +678,12 @@ VIP.chat = (function () {
         const headerBtn = document.getElementById('canalTelegramHeaderBtn');
         if (menuBtn) { menuBtn.href = href; menuBtn.style.display = 'inline-flex'; }
         if (headerBtn) { headerBtn.href = href; headerBtn.style.display = 'flex'; }
+        // Formato casino (#270): el header y el menú ☰ quedan TAPADOS por el
+        // overlay del casino, así que el link también se publica en VIP.state y
+        // se pinta en el widget "Cargas Automáticas" (botón 📣 Comunidad). Solo
+        // se muestra si hay URL cargada en el panel: nada de botones muertos.
+        VIP.state.communityChannelUrl = url || '';
+        try { if (VIP.ui && VIP.ui._applyCasinoCommunity) VIP.ui._applyCasinoCommunity(); } catch (e) {}
     }
 
     // Config de Comunidad (canal / soporte / logo): CON REINTENTOS y REFRESCO.

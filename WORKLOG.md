@@ -6,6 +6,29 @@
 >
 > **Última actualización: 2026-09-08**
 
+## Sesión 2026-09-09
+
+### 270. El link de la Comunidad de Telegram (panel → Comandos) no aparecía del lado del cliente
+- **Reporte owner:** carga el Telegram de la comunidad PAUTAUTOMATICA en la card
+  "📣 Comunidad / Canal de Telegram" (sección Comandos) y el usuario no tiene ninguna
+  sección para entrar.
+- **Causa:** la config se guardaba bien (`communityConfig.channelUrl`, `/go/comunidad`,
+  `GET /api/config/community`) y el front la aplicaba… al pill celeste del header y al
+  ítem del menú ☰ del **dashboard viejo**, que desde el formato "entrada única al
+  casino" (#234) queda TAPADO por el overlay `#casinoOverlay` (z-index 99999). El
+  widget "Cargas Automáticas" (lo único que el cliente ve) no tenía ningún acceso.
+- **Fix (front):** 3ª fila del widget con el botón celeste **"📣 Unite a la Comunidad
+  de Telegram"** (`#casinoCommunityRow`/`#casinoCommunityBtn`, ui.js). Visible SOLO
+  si hay URL cargada: `chat.js._applyCanalUrl` deja la URL en
+  `VIP.state.communityChannelUrl` y llama `VIP.ui._applyCasinoCommunity()`; el
+  overlay también la aplica al crearse (por si la config llegó antes). Sin URL, la
+  fila no existe (no hay botón muerto). Los reintentos/cache de la config (#136/#147)
+  siguen alimentando esto sin cambios. Hint de la card del panel actualizado.
+- **Validado:** `node --check` OK (ui.js, chat.js, sw). **SW → v158.** Solo front
+  (`/js/` llega por stale-while-revalidate en la próxima carga; en Render/EB con el
+  deploy). PROBAR: cargar URL en la card → Guardar → abrir la app como cliente → widget
+  ⚡ → aparece la fila celeste y abre el canal; vaciar la URL → desaparece.
+
 ## Sesión 2026-09-08
 
 ### 269. Clonación AWS a cuenta nueva: reinicio del proceso (el export se perdió con Tails) + guía corregida para ESTE repo
