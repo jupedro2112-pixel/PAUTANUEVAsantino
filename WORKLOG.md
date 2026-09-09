@@ -24,7 +24,16 @@
   overlay también la aplica al crearse (por si la config llegó antes). Sin URL, la
   fila no existe (no hay botón muerto). Los reintentos/cache de la config (#136/#147)
   siguen alimentando esto sin cambios. Hint de la card del panel actualizado.
-- **Validado:** `node --check` OK (ui.js, chat.js, sw). **SW → v158.** Solo front
+- **#270b — SIEMPRE visible (owner, misma sesión: "a veces aparece y a veces no; en un
+  iPhone con la PWA no aparece ni reiniciando").** Causa: la fila se mostraba recién
+  cuando el fetch de `/api/config/community` traía la URL — en iPhone/Tor ese fetch
+  puede fallar o llegar tarde (y el `/js/` viejo del SW tarda una carga en
+  refrescarse). Ahora la fila está SIEMPRE en el widget con href estático
+  **`/go/comunidad`** (el server redirige al link vigente del panel al momento del
+  click — idéntico al pill del header, #150) y chat.js solo lo pisa con el link
+  directo cuando la config carga. Nunca se oculta. Sin URL en el panel, `/go/comunidad`
+  cae al inicio de la app (no a un 404). **SW → v159.**
+- **Validado:** `node --check` OK (ui.js, chat.js, sw). Solo front
   (`/js/` llega por stale-while-revalidate en la próxima carga; en Render/EB con el
   deploy). PROBAR: cargar URL en la card → Guardar → abrir la app como cliente → widget
   ⚡ → aparece la fila celeste y abre el canal; vaciar la URL → desaparece.

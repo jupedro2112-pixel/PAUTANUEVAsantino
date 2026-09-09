@@ -1280,21 +1280,18 @@ VIP.ui._casinoFrameStuck = function() {
 // quedaron sin ningún caller al reemplazar ese pop-up por el asistente/bot
 // (casinoBotGo). Código muerto verificado (0 referencias). Ver WORKLOG #234.
 
-/** Botón 📣 Comunidad del widget del casino (#270): visible SOLO si el panel
- *  tiene cargada la URL del canal (chat.js la deja en VIP.state al cargar la
- *  config y llama a esto; también se llama al crear el overlay). Sin URL, la
- *  fila queda oculta — no hay botón que lleve a ningún lado. */
+/** Botón 📣 Comunidad del widget del casino (#270). SIEMPRE visible (owner
+ *  2026-09-09: "a veces aparecía y a veces no" — dependía de que el fetch de la
+ *  config llegara, y en iPhone/Tor no siempre llega a tiempo). El href estático
+ *  es /go/comunidad: el SERVER redirige al link vigente del panel en el momento
+ *  del click (mismo criterio que el pill del header, #150) — no hay carrera.
+ *  Cuando la config carga, chat.js deja la URL en VIP.state y acá se pisa el
+ *  href con el link directo (ahorra el redirect). Nunca se oculta. */
 VIP.ui._applyCasinoCommunity = function() {
-  const row = document.getElementById('casinoCommunityRow');
   const a = document.getElementById('casinoCommunityBtn');
-  if (!row || !a) return;
+  if (!a) return;
   const url = (VIP.state && VIP.state.communityChannelUrl) || '';
-  if (/^https?:\/\//i.test(url)) {
-    a.href = url;
-    row.style.display = 'flex';
-  } else {
-    row.style.display = 'none';
-  }
+  if (/^https?:\/\//i.test(url)) a.href = url;
 };
 
 /** Crea (una sola vez) y muestra el recuadro del casino. */
@@ -1437,9 +1434,9 @@ VIP.ui._showCasinoFrame = function() {
         // 3ª fila: 📣 COMUNIDAD de Telegram (#270). En el formato casino el pill
         // celeste del header y el ítem del menú ☰ quedan tapados por el overlay,
         // así que el link del canal (panel → Comandos → "Comunidad / Canal de
-        // Telegram") se muestra ACÁ. Oculto hasta que haya URL configurada
-        // (VIP.state.communityChannelUrl, la setea chat.js al cargar la config).
-        '<div class="cwBar" id="casinoCommunityRow" style="flex:0 0 auto;display:none;padding:0 8px 8px;">' +
+        // Telegram") se muestra ACÁ. SIEMPRE visible: href estático /go/comunidad
+        // (redirect del server al link vigente) y chat.js lo pisa con el directo.
+        '<div class="cwBar" id="casinoCommunityRow" style="flex:0 0 auto;display:flex;padding:0 8px 8px;">' +
           '<a id="casinoCommunityBtn" href="/go/comunidad" target="_blank" rel="noopener noreferrer" ' +
           'title="Unite a la Comunidad de Telegram" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;' +
           'background:linear-gradient(135deg,#37b2f0,#1e96d6);color:#fff;text-decoration:none;border-radius:9px;' +

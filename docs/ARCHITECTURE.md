@@ -820,7 +820,8 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   `chat.js._applyCanalUrl` a TRES lugares: pill del header + ítem del menú ☰ (dashboard
   viejo, tapado por el casino) y, desde #270, la fila **"📣 Unite a la Comunidad"**
   del widget "Cargas Automáticas" (`#casinoCommunityRow`, ui.js
-  `_applyCasinoCommunity`, visible solo con URL cargada — `VIP.state.communityChannelUrl`).
+  `_applyCasinoCommunity`): SIEMPRE visible, href estático `/go/comunidad` que chat.js
+  pisa con el link directo cuando la config llega (`VIP.state.communityChannelUrl`).
 - **Botón CASINO** (`#plataformaBtn` → `VIP.ui.enterCasino()`): login único contra
   1girox. Ver la trampa del pop-up blocker en §4.9. El modal de acceso manual sigue
   existiendo, pero **sólo como camino de respaldo** cuando el SSO falla.

@@ -680,8 +680,8 @@ VIP.chat = (function () {
         if (headerBtn) { headerBtn.href = href; headerBtn.style.display = 'flex'; }
         // Formato casino (#270): el header y el menú ☰ quedan TAPADOS por el
         // overlay del casino, así que el link también se publica en VIP.state y
-        // se pinta en el widget "Cargas Automáticas" (botón 📣 Comunidad). Solo
-        // se muestra si hay URL cargada en el panel: nada de botones muertos.
+        // se pinta en el widget "Cargas Automáticas" (botón 📣 Comunidad, que
+        // arranca apuntando a /go/comunidad y acá recibe el link directo).
         VIP.state.communityChannelUrl = url || '';
         try { if (VIP.ui && VIP.ui._applyCasinoCommunity) VIP.ui._applyCasinoCommunity(); } catch (e) {}
     }
