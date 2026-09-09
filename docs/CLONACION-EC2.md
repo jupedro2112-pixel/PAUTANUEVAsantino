@@ -172,6 +172,27 @@ La Parte B y el inicio de C quedan solo como plan B si CloudShell no estuviera.
 índices únicos, pero no los tengas semanas en paralelo: mové el dominio y
 después apagá el viejo.
 
+## OPERACIÓN DIARIA en la cuenta nueva (después de la clonación)
+
+**Deploy de un cambio de código** (CloudShell de la cuenta nueva, sa-east-1; 4
+comandos, siempre iguales — equivale al "Upload and deploy" de la consola):
+```bash
+cd ~/PAUTANUEVAsantino && git pull && git archive -o /tmp/app.zip HEAD
+BUCKET=elasticbeanstalk-sa-east-1-062472745735; V=v$(date +%Y%m%d-%H%M); echo $V; aws s3 cp /tmp/app.zip s3://$BUCKET/PAUTANUEVAsantino/$V.zip
+aws elasticbeanstalk create-application-version --application-name PAUTANUEVAsantino --version-label $V --region sa-east-1 --source-bundle S3Bucket=$BUCKET,S3Key=PAUTANUEVAsantino/$V.zip --query 'ApplicationVersion.Status'
+aws elasticbeanstalk update-environment --environment-name PAUTANUEVAsantino-env --version-label $V --region sa-east-1 --query '{Status:Status,Version:VersionLabel}'
+```
+Estado: `bash scripts/aws-bootstrap-clone.sh status PAUTANUEVAsantino-env` (3-5 min a Ready).
+Si `~/PAUTANUEVAsantino` no existe (CloudShell limpio): `git clone https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git` primero.
+
+**Cambiar un secreto/config** (key 1girox, hgcash, Mongo, dominios…): SSM
+`aws ssm put-parameter --name /pautanuevasantino/prod/NOMBRE --type SecureString --overwrite --value "..." --region sa-east-1`
++ `aws elasticbeanstalk restart-app-server --environment-name PAUTANUEVAsantino-env --region sa-east-1`
+(los SSM se leen solo al arrancar).
+
+**URLs:** PWA `https://auto1girox.com` · panel `https://panel.auto1girox.com/adminprivado2026/`
+(ADMIN_HOST; solo por ese host) · EB `pautanuevasantino-env.eba-am24im4u.sa-east-1.elasticbeanstalk.com`.
+
 ## ¿Riesgo de que conecte las cuentas, así?
 
 **Por el método: NO.** Cero llamadas de API entre cuentas; AWS solo ve un
