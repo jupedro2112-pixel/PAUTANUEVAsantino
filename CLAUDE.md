@@ -59,6 +59,11 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 - `src/utils/periodRanges.js` — rangos de fecha (ayer / semana / mes) en hora argentina.
 - `jugaygana*.js` + `referralRevenueService.js` + `jugayganaUserLinkService.js` —
   **muertos**, sin consumidores. Ver la nota de migración arriba.
+- `docs/CLONACION-PASO-A-PASO.txt` — runbook probado para clonar TODO el proyecto a
+  otra cuenta AWS desde CloudShell (usa `scripts/aws-export-config.sh` +
+  `scripts/aws-bootstrap-clone.sh`, etapas iam/ssm/redis/cert/eb/sg/https/deploy).
+  `docs/CLONACION-EC2.md` = bitácora de la clonación del 2026-09-08 (cuenta
+  `zamuxavier`, dominio auto1girox.com).
 - `src/models/` — schemas Mongoose canónicos (fuente de verdad).
 - `src/services/` — lógica (referidos, notificaciones, otp, metaCapi, fbAds, hgcash,
   comprobantes IA, analítica publicistas…).

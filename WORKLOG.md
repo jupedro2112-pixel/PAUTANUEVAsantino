@@ -8,6 +8,26 @@
 
 ## Sesión 2026-09-09
 
+### 271. Runbook DEFINITIVO de clonación a otra cuenta AWS (`docs/CLONACION-PASO-A-PASO.txt`) + script con etapas nuevas
+- **Pedido owner:** "voy a comprar otro Amazon y quiero hacer lo mismo sin errores":
+  un .txt con TODO el paso a paso desde CloudShell, con lo que sirvió y sin lo que
+  atrasó.
+- **`docs/CLONACION-PASO-A-PASO.txt`:** 11 secciones (reglas anti-error, export, subir,
+  cert PRIMERO, iam/ssm/redis, eb, sg+SSM de hosts, deploy, https+DNS, externos y
+  limpieza, operación diaria, "lo que NO hay que hacer"). Parametrizado con
+  APP/ENV/SSMPATH/DOMINIO. Orden optimizado: el cert se pide al principio (valida
+  mientras se arma el resto — con el panel en HTTPS obligatorio, dejarlo para el
+  final bloqueaba la prueba), el Redis no se espera (se conecta después del eb).
+- **`scripts/aws-bootstrap-clone.sh`:** `ssm` salta `AWS_ACCESS_KEY_ID/SECRET` (vínculo
+  con la cuenta vieja) y muestra "ok NOMBRE" por parámetro; `redis` = el comando
+  PROBADO (replication group sin TLS + SG default explícito, así `describe` no da
+  None); `cert` pide dominio + www + **panel**; etapas nuevas **`redis-url`** (imprime
+  el REDIS_URL), **`sg`** (6379 desde el SG de instancias), **`https`** (listener 443 con
+  JSON por printf), **`deploy`** (git archive → S3 → versión → update-environment).
+  `bash -n` OK; el generador del ssm probado con un export falso.
+- `docs/CLONACION-EC2.md` queda como bitácora de ESTA clonación; para la próxima se
+  usa el .txt.
+
 ### 270. El link de la Comunidad de Telegram (panel → Comandos) no aparecía del lado del cliente
 - **Reporte owner:** carga el Telegram de la comunidad PAUTAUTOMATICA en la card
   "📣 Comunidad / Canal de Telegram" (sección Comandos) y el usuario no tiene ninguna

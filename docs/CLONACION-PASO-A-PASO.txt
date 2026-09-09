@@ -1,0 +1,209 @@
+=====================================================================
+CLONAR EL PROYECTO ENTERO A UNA CUENTA AWS NUEVA — PASO A PASO DEFINITIVO
+(todo desde CloudShell, sin EC2, sin S3, sin rol; probado el 2026-09-08)
+=====================================================================
+
+Resultado final: la misma app (mismo código, misma base Mongo, misma cuenta
+1girox/hgcash/Firebase) corriendo en OTRA cuenta AWS, con su propio dominio y
+HTTPS, sin ninguna conexión técnica con la cuenta anterior.
+
+Tiempo real: ~60-75 min, casi todo espera (cert, entorno, deploy).
+
+---------------------------------------------------------------------
+0. REGLAS QUE EVITAN TODOS LOS ERRORES QUE TUVIMOS
+---------------------------------------------------------------------
+R1. Tails borra TODO al reiniciar. Bajá el archivo de la cuenta vieja y
+    subilo a la cuenta nueva EN LA MISMA SESIÓN. No apagues la PC en el medio.
+R2. En CloudShell las líneas largas SE CORTAN al pegar (queda una mitad y
+    bash espera con ">" o dice "command not found"). Por eso todo va por
+    ETAPAS CORTAS del script. Pegá UNA línea por vez, mirá que quede entera
+    antes de Enter. Si ves ">" solo: Ctrl+C y volvé a pegar.
+R3. Si CloudShell se reinicia (pantalla vacía "~ $"), NO se perdió nada de
+    AWS: solo las variables. Pegá de nuevo el paso 2.3 (cd + export) y seguís.
+R4. Mismo dominio en dos cuentas = ACM las vincula. Para separación real:
+    dominio NUEVO en la cuenta nueva.
+R5. El panel admin NO loguea por HTTP (cookies Secure). HTTPS + dominio es
+    obligatorio para probar el panel. Por eso el cert se pide TEMPRANO.
+R6. Las claves AWS_ACCESS_KEY_ID/SECRET del SSM viejo son credenciales IAM de
+    la cuenta vieja: el script YA NO las importa (vínculo entre cuentas).
+R7. Región siempre sa-east-1 (São Paulo), en las dos cuentas y en todo.
+R8. Navegadores/ventanas separadas para cada consola AWS. No las dos
+    sesiones en las mismas pestañas.
+
+Variables que vas a usar (elegilas antes de empezar y anotalas):
+  APP      = nombre de la app EB nueva      ej: PAUTANUEVAsantino
+  ENV      = nombre del entorno             ej: PAUTANUEVAsantino-env  (=APP + "-env")
+  SSMPATH  = path SSM nuevo                 ej: /pautanuevasantino/prod/  (minúsculas, con / al final)
+  DOMINIO  = dominio nuevo, ya en Cloudflare ej: auto1girox.com
+  REPO     = https://github.com/jupedro2112-pixel/PAUTANUEVAsantino.git
+De la cuenta VIEJA (verificalas en la consola vieja → Elastic Beanstalk →
+Environments → la fila del proyecto → Configuration → Environment properties):
+  APP_VIEJA / ENV_VIEJA / SSMPATH_VIEJO   (2026-09-08 eran: paginaaaacreada /
+  pauprueba / /pautomaticonar/prod/ — pueden ser otros en otro proyecto)
+
+---------------------------------------------------------------------
+1. CUENTA VIEJA — EXPORTAR (5 min)
+---------------------------------------------------------------------
+1.1 Consola vieja → región sa-east-1 → CloudShell (ícono >_ arriba a la derecha).
+1.2 Pegar (una línea por vez):
+      git clone REPO
+      cd PAUTANUEVAsantino
+      bash scripts/aws-export-config.sh SSMPATH_VIEJO APP_VIEJA ENV_VIEJA
+    Esperado: "== 1/4 SSM ..." N parámetros ... "✅ Listo: clon-export.tar.gz".
+    (Si ya clonaste otra vez: "cd PAUTANUEVAsantino && git pull" y el bash.)
+1.3 Acciones → Descargar archivo → escribir:  PAUTANUEVAsantino/clon-export.tar.gz
+    Pesa ~10 KB (son 5 JSON). Tiene TODOS los secretos: no va a ningún repo.
+1.4 Cerrar la consola vieja. El entorno viejo sigue funcionando igual.
+
+---------------------------------------------------------------------
+2. CUENTA NUEVA — SUBIR EL ARCHIVO Y PREPARAR (5 min)
+---------------------------------------------------------------------
+2.1 Consola nueva (cuenta ya creada, tarjeta OK) → región sa-east-1 → CloudShell.
+    Si CloudShell no abre ("account pending verification"): esperar 24-48 h.
+2.2 Acciones → Cargar archivo → clon-export.tar.gz (queda en /home/cloudshell-user).
+2.3 Pegar (una por vez):
+      git clone REPO
+      cd ~/PAUTANUEVAsantino && export AWS_REGION=sa-east-1
+      mv ~/clon-export.tar.gz . && tar xzf clon-export.tar.gz && ls clon-export
+    Esperado: eb-config.json eb-env.json meta.json option-settings.json ssm.json
+2.4 Chequeo del archivo (solo nombres, no valores):
+      python3 -c "import json;p=json.load(open('clon-export/ssm.json'))['Parameters'];print(len(p),sorted(x['Name'].split('/')[-1] for x in p))"; cat clon-export/meta.json
+    Esperado: ~35 nombres (MONGODB_URI, GIROX_API_KEY, JWT_SECRET, REDIS_URL,
+    ADMIN_HOST, ALLOWED_ORIGINS...) y un SolutionStackName con "Node.js".
+
+---------------------------------------------------------------------
+3. CERTIFICADO — PEDIRLO AHORA (valida mientras hacés el resto)
+---------------------------------------------------------------------
+3.1   bash scripts/aws-bootstrap-clone.sh cert DOMINIO
+    Imprime "ARN: arn:aws:acm:..." (ANOTALO) y 3 líneas:
+      _abc.DOMINIO.        _xyz.jkddzztszm.acm-validations.aws.
+      _abc.www.DOMINIO.    _xyz....
+      _abc.panel.DOMINIO.  _xyz....
+3.2 Cloudflare → DOMINIO → DNS → Add record, por cada línea:
+      Tipo CNAME · Name = lo de la izquierda · Target = lo de la derecha ·
+      Proxy OFF (nube gris). Copiar desde la terminal (selección), no a mano.
+    Son 3 registros (dominio, www, panel).
+3.3 Más adelante chequeás (repetir hasta "ISSUED", suele tardar 5-15 min):
+      ARN=$(aws acm list-certificates --region sa-east-1 --query 'CertificateSummaryList[0].CertificateArn' --output text); echo $ARN
+      aws acm describe-certificate --certificate-arn $ARN --region sa-east-1 --query Certificate.Status
+
+---------------------------------------------------------------------
+4. INFRA (rol, SSM, Redis) — 3 etapas (5 min)
+---------------------------------------------------------------------
+4.1   bash scripts/aws-bootstrap-clone.sh iam
+    Esperado al final: "✅ instance profile aws-elasticbeanstalk-ec2-role listo (5 policies)"
+4.2   bash scripts/aws-bootstrap-clone.sh ssm SSMPATH
+    Esperado: "ok NOMBRE" por cada parámetro, "⏭️ AWS_ACCESS_KEY_ID: NO se importa"
+    (x2) y "✅ 33 parámetros importados a SSMPATH".
+4.3   bash scripts/aws-bootstrap-clone.sh redis
+    Esperado: "SG default: sg-..." y luego Id: clon-redis / Status: creating.
+    (Sin TLS a propósito: es lo que funcionó; está dentro de la VPC con SG.)
+    Tarda 5-10 min; NO hay que esperar acá, seguí con el paso 5.
+
+---------------------------------------------------------------------
+5. ENTORNO ELASTIC BEANSTALK (15 min de espera)
+---------------------------------------------------------------------
+5.1   bash scripts/aws-bootstrap-clone.sh eb APP ENV SSMPATH https://DOMINIO
+    Esperado: "Stack: 64bit Amazon Linux 2023 ... Node.js 24", "descartados
+    (cuenta vieja): ...managedactions..., ...SecurityGroups" (normal), una tabla
+    con Status: Launching. El último argumento es de relleno (el SSM lo pisa).
+    Si dice "app ya existe": normal si reintentaste.
+    Si tira ConfigurationValidationException: pegá el mensaje completo al
+    asistente (dice qué Namespace/OptionName es; se agrega al filtro del script).
+5.2 Esperar Ready (10-15 min), repetir:
+      bash scripts/aws-bootstrap-clone.sh status ENV
+    Esperado: Health Green · Status Ready · URL xxxx.sa-east-1.elasticbeanstalk.com
+    ANOTÁ LA URL (todo en minúsculas), es EBURL.
+
+---------------------------------------------------------------------
+6. CONECTAR REDIS + SSM DE LA URL NUEVA (5 min)
+---------------------------------------------------------------------
+6.1   bash scripts/aws-bootstrap-clone.sh sg ENV
+    Esperado: "instancias=sg-... redis(default)=sg-..." y "true".
+6.2   bash scripts/aws-bootstrap-clone.sh redis-url
+    Esperado: Status available y "REDIS_URL = redis://clon-redis....cache.amazonaws.com:6379/0"
+    (si dice "todavía no hay endpoint", esperá 2 min y repetí)
+6.3 Cargar en SSM (una línea por vez; reemplazá EBURL, SSMPATH y el redis://):
+      aws ssm put-parameter --name SSMPATH/REDIS_URL --type SecureString --overwrite --value "redis://PEGAR_ENDPOINT:6379/0" --region sa-east-1
+      aws ssm put-parameter --name SSMPATH/ADMIN_HOST --type SecureString --overwrite --value "panel.DOMINIO" --region sa-east-1
+      aws ssm put-parameter --name SSMPATH/PUBLIC_BASE_URL --type SecureString --overwrite --value "https://DOMINIO" --region sa-east-1
+      aws ssm put-parameter --name SSMPATH/ALLOWED_ORIGINS --type SecureString --overwrite --value "https://DOMINIO,https://www.DOMINIO,https://panel.DOMINIO" --region sa-east-1
+    Esperado: "Version": 2 en cada uno. (OJO: SSMPATH ya termina en "/", así
+    que queda ".../prod/REDIS_URL", sin doble barra.)
+
+---------------------------------------------------------------------
+7. DEPLOY DEL CÓDIGO (5 min)
+---------------------------------------------------------------------
+7.1   bash scripts/aws-bootstrap-clone.sh deploy APP ENV
+    Esperado: "UNPROCESSED" o "PROCESSED" y tabla Status: Updating.
+7.2 Esperar Ready:  bash scripts/aws-bootstrap-clone.sh status ENV
+7.3 Prueba de vida (reemplazá EBURL):
+      curl -s -o /dev/null -w '%{http_code}\n' http://EBURL/
+    Esperado: 200. (El deploy también reinicia la app → toma los SSM del paso 6.)
+
+---------------------------------------------------------------------
+8. HTTPS + DOMINIO (10 min)
+---------------------------------------------------------------------
+8.1 Verificar que el cert esté ISSUED (paso 3.3). Si no, esperar.
+8.2   bash scripts/aws-bootstrap-clone.sh https ENV $ARN
+    Esperado: Updating. Esperar Ready (status).
+8.3 Cloudflare → DNS → 3 registros CNAME, Target = EBURL:
+      @      → EBURL   proxy ON (naranja)
+      www    → EBURL   proxy ON (naranja)
+      panel  → EBURL   proxy OFF (gris)
+    Cloudflare → SSL/TLS → modo "Full".
+    Cloudflare → Security → WAF → regla "Skip" para la ruta /api/hgcash/webhook
+    (igual que en el viejo, para que el webhook del banco no lo frene el WAF).
+8.4 Probar:
+      https://panel.DOMINIO/adminprivado2026/   → login del panel (misma base:
+                                                   tus usuarios de siempre)
+      https://DOMINIO/                          → la PWA
+    Si el panel dice "Not found": la app no tomó el ADMIN_HOST nuevo →
+      aws elasticbeanstalk restart-app-server --environment-name ENV --region sa-east-1
+    y esperar 1-2 min.
+
+---------------------------------------------------------------------
+9. EXTERNOS + LIMPIEZA
+---------------------------------------------------------------------
+9.1 hgcash (dashboard): webhook → https://DOMINIO/api/hgcash/webhook
+9.2 Firebase console → Authentication → Authorized domains → agregar DOMINIO
+    (para el push/FCM desde el dominio nuevo).
+9.3 MongoDB Atlas → Network Access: si NO es 0.0.0.0/0, agregar las IPs nuevas.
+9.4 Borrar el archivo con secretos:
+      rm ~/PAUTANUEVAsantino/clon-export.tar.gz ~/PAUTANUEVAsantino/clon-export -rf
+    y el clon-export.tar.gz de la carpeta Descargas de la PC.
+9.5 Entorno viejo: dejarlo unos días en paralelo (comparten la misma Mongo; es
+    seguro por los índices únicos, pero no semanas). Cuando el nuevo lleve días
+    OK: mover el tráfico (DNS del dominio viejo o avisar la URL nueva) y apagarlo.
+
+---------------------------------------------------------------------
+10. DESPUÉS: OPERACIÓN DIARIA EN LA CUENTA NUEVA
+---------------------------------------------------------------------
+Subir un cambio de código (equivale a "Upload and deploy"):
+      cd ~/PAUTANUEVAsantino && export AWS_REGION=sa-east-1
+      bash scripts/aws-bootstrap-clone.sh deploy APP ENV
+Cambiar un secreto/config (key 1girox, hgcash, Mongo…): put-parameter en
+SSMPATH (como en 6.3) + restart-app-server (como en 8.4). Los SSM se leen
+solo al arrancar.
+Estado del entorno:  bash scripts/aws-bootstrap-clone.sh status ENV
+
+---------------------------------------------------------------------
+11. LO QUE NO HAY QUE HACER (nos hizo perder tiempo)
+---------------------------------------------------------------------
+- Crear EC2 "bootstrap" + rol + bucket S3 para mover el archivo: era el plan
+  para cuentas sin CloudShell. Con CloudShell disponible NO hace falta.
+- create-cache-cluster con --transit-encryption-enabled: la API lo rechaza
+  ("Encryption feature is not supported for engine REDIS"). El script ya usa
+  create-replication-group.
+- Pegar comandos largos de una: se cortan. Etapas cortas.
+- Pegar JSON por heredoc (cat <<EOF): se pierden comas. El script arma el JSON
+  con printf.
+- Probar el panel por http://EBURL: carga el login pero NUNCA loguea (cookie
+  Secure). No es un bug: hace falta el dominio con HTTPS.
+- Dejar el cert para "después": bloquea la prueba del panel. Pedirlo en el
+  paso 3, al principio.
+- Importar AWS_ACCESS_KEY_ID/SECRET del SSM viejo: vínculo con la otra cuenta.
+  El script las salta solo.
+- Poner ADMIN_HOST = URL EB con HTTPS: el cert es del dominio, no de
+  elasticbeanstalk.com → advertencia del navegador. Por eso panel.DOMINIO va
+  en el cert (SAN) y en ADMIN_HOST.
