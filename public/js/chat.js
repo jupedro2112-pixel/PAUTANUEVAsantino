@@ -14,13 +14,47 @@ VIP.chat = (function () {
         return div.innerHTML;
     }
 
+    // Scroll al último mensaje — INSTANTÁNEO a propósito (#273). El CSS de
+    // .chat-messages tiene scroll-behavior:smooth: con eso, el scrollTop
+    // programático se ANIMABA y cualquier cambio de altura durante la
+    // animación (imagen que carga, otro mensaje, teclado) la dejaba corta →
+    // "llega el mensaje pero hay que deslizar para verlo". Además, leer
+    // scrollTop en medio de la animación hacía creer que el usuario había
+    // subido y el polling ni intentaba bajar. Ahora se apaga el smooth solo
+    // para el salto programático y se baja también el scroller ancestro (por
+    // si el chat vive dentro del widget del casino).
     function scrollToBottom() {
         const container = document.getElementById('chatMessages');
-        if (container) {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-            container.scrollTop = container.scrollHeight;
+        if (!container) return;
+        const prev = container.style.scrollBehavior;
+        container.style.scrollBehavior = 'auto';
+        container.scrollTop = container.scrollHeight;
+        container.style.scrollBehavior = prev;
+        VIP.state._chatStickToBottom = true;
+        let p = container.parentElement, n = 0;
+        while (p && n++ < 6) {
+            try {
+                const oy = getComputedStyle(p).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) p.scrollTop = p.scrollHeight;
+            } catch (e) {}
+            p = p.parentElement;
         }
     }
+
+    // ¿El usuario está viendo el final del chat? Se actualiza con CADA scroll
+    // real (el programático también termina abajo → true). Lo usan el polling
+    // y la carga de imágenes para no pisarle el scroll a quien subió a leer.
+    function _isNearBottom(container) {
+        return (container.scrollHeight - container.scrollTop - container.clientHeight) < 120;
+    }
+    (function _bindStick() {
+        const c = document.getElementById('chatMessages');
+        if (!c) { document.addEventListener('DOMContentLoaded', _bindStick, { once: true }); return; }
+        if (c._stickBound) return;
+        c._stickBound = true;
+        VIP.state._chatStickToBottom = true;
+        c.addEventListener('scroll', function () { VIP.state._chatStickToBottom = _isNearBottom(c); }, { passive: true });
+    })();
 
     // ---- Lightbox ----
 
@@ -102,6 +136,11 @@ VIP.chat = (function () {
                 img.addEventListener('click', function() {
                     openLightbox(imageUrl);
                 });
+                // La imagen carga DESPUÉS del scroll y agranda la lista: si el
+                // usuario estaba abajo, volver a bajar (#273).
+                img.addEventListener('load', function() {
+                    if (VIP.state._chatStickToBottom !== false) scrollToBottom();
+                });
             }
         }
 
@@ -170,7 +209,7 @@ VIP.chat = (function () {
     function renderMessages(messages) {
         const container = document.getElementById('chatMessages');
         const isInitialLoad = VIP.state.lastMessagesHash === '';
-        const wasAtBottom = isInitialLoad || (container.scrollHeight - container.scrollTop - container.clientHeight) < 60;
+        const wasAtBottom = isInitialLoad || VIP.state._chatStickToBottom !== false || _isNearBottom(container);
 
         const fragment = document.createDocumentFragment();
         VIP.state.processedMessageIds.clear();
@@ -190,17 +229,20 @@ VIP.chat = (function () {
         container.innerHTML = '';
         container.appendChild(fragment);
 
+        let newIncoming = false;
         if (messages.length > 0) {
             const lastMsg = messages[messages.length - 1];
             const adminRoles = ['admin', 'depositor', 'withdrawer'];
             if (VIP.state.lastMessageId && VIP.state.lastMessageId !== lastMsg.id && adminRoles.includes(lastMsg.senderRole)) {
                 VIP.notifications.playNotificationSound();
+                newIncoming = true; // respuesta nueva del agente ⇒ mostrarla sí o sí
             }
             VIP.state.lastMessageId = lastMsg.id;
         }
 
-        if (wasAtBottom) {
+        if (wasAtBottom || newIncoming) {
             requestAnimationFrame(() => scrollToBottom());
+            setTimeout(scrollToBottom, 120);
         }
     }
 

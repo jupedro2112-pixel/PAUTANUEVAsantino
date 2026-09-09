@@ -3312,7 +3312,9 @@ VIP.ui._playChime = function() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    if (!VIP.ui._audioCtx) VIP.ui._audioCtx = new AC();
+    // Reusar el contexto que notifications.js desbloquea con el primer gesto
+    // (#273): un contexto propio creado fuera de un gesto suena mudo en mobile.
+    if (!VIP.ui._audioCtx) VIP.ui._audioCtx = (VIP.state && VIP.state.notificationAudioContext) || new AC();
     const ctx = VIP.ui._audioCtx;
     if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
     [ [880, 0], [1320, 0.14] ].forEach(function(p) {

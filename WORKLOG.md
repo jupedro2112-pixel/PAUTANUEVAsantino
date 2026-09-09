@@ -8,6 +8,35 @@
 
 ## Sesión 2026-09-09
 
+### 273. Chat del cliente: sin SONIDO al responder el agente + el mensaje nuevo no bajaba solo
+- **Reporte owner:** cuando el admin responde, el usuario no escucha el sonido; y el
+  mensaje nuevo llega pero hay que deslizar hacia abajo para verlo.
+- **Causa 1 (sonido, `notifications.js`):** el `AudioContext` se creaba recién al llegar
+  el mensaje, FUERA de un gesto del usuario → en Android/iPhone nace `suspended` y el
+  oscilador suena mudo; nunca se llamaba `resume()`. `ui.js._playChime` tenía un
+  contexto aparte con el mismo problema.
+  **Fix:** un solo contexto compartido (`VIP.state.notificationAudioContext`) que se
+  crea y **desbloquea con el primer toque/tecla** en la página (listeners one-shot en
+  captura: pointerdown/touchend/keydown/click — se sacan al quedar `running`);
+  `playNotificationSound` hace `resume()` antes de sonar (dos tonos, igual que el chime
+  del widget) + `navigator.vibrate(120)` en Android. `_playChime` reusa ese contexto.
+  Límite real: si el usuario NUNCA tocó la página (p.ej. la abrió desde una push y no
+  interactuó), el celular no deja sonar hasta el primer toque.
+- **Causa 2 (scroll, `chat.js`):** `.chat-messages` tiene `scroll-behavior:smooth` en
+  CSS → el `scrollTop = scrollHeight` programático se ANIMABA; cualquier cambio de
+  altura durante la animación (imagen `loading=lazy` que carga, otro mensaje, teclado)
+  la dejaba corta, y el polling leía `scrollTop` a mitad de animación → creía que el
+  usuario había subido (`wasAtBottom=false`) y no bajaba.
+  **Fix:** `scrollToBottom` apaga el smooth solo para el salto (instantáneo) y baja
+  también el scroller ancestro; flag `VIP.state._chatStickToBottom` mantenido por el
+  evento `scroll` real (umbral 120px) que usan el polling y el `load` de cada imagen
+  (re-baja si el usuario estaba abajo); en el polling, una respuesta NUEVA del agente
+  baja SIEMPRE (`newIncoming`), aunque el usuario estuviera leyendo arriba.
+- **Validado:** `node --check` OK (notifications.js, chat.js, ui.js, sw). **SW → v161.**
+  Solo front. PROBAR: cliente en el widget → 🎧 Soporte → agente responde → suena +
+  vibra + el mensaje queda a la vista; agente manda imagen → queda a la vista al
+  cargar; cliente sube a leer → llega respuesta → baja igual.
+
 ### 272. Campana 🔔 "ACTIVAR NOTIFICACIONES" (1 toque → cartel Permitir) en la guía de instalación
 - **Pedido owner:** la gente no sabe activar las notificaciones; decirles "andá a
   ajustes → app → notificaciones" es lento y muchos no lo entienden. Quiere un botón

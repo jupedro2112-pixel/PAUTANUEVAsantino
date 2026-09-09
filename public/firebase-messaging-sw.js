@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v160'; // v160: campana 🔔 ACTIVAR NOTIFICACIONES en la guía de instalación (1 toque → cartel Permitir; bloqueadas → cómo desbloquear)
+const CACHE_VERSION = 'v161'; // v161: sonido de mensaje nuevo (AudioContext desbloqueado con el primer gesto) + scroll instantáneo al último mensaje (sin smooth que se quedaba corto)
+// v160: // v160: campana 🔔 ACTIVAR NOTIFICACIONES en la guía de instalación (1 toque → cartel Permitir; bloqueadas → cómo desbloquear)
 // v159: botón 📣 Comunidad SIEMPRE visible en el widget del casino (href /go/comunidad; antes dependía del fetch de la config y en iPhone a veces no aparecía)
 // v156: // v156: seccion INFORMACION del hub (reembolso completo + rollover, con valores reales del panel; deportes no cuenta)
 // v155: // v155: tarjeta 'Tu Reembolso' simple — monto grande siempre visible, un boton, sin jerga
