@@ -12083,18 +12083,22 @@ async function _cashbackPaidBetween(userId, fromDate, toDate) {
 // Estado del REEMBOLSO ACUMULATIVO (owner 2026-09-03, #257). fresh=true →
 // netwin sin cache (para la RECLAMACIÓN).
 //
-// MODELO: ventana rodante de 30 días. La pérdida NETA de la ventana (apostado −
-// ganado; las ganancias netean solas → jamás se reembolsa plata que ganó) genera
-// `pct%`, y TODO lo ya cobrado en la ventana se descuenta:
-//     reclamable = pct% × pérdidaNeta(30d) − cobrado(30d)
+// MODELO (#257b, owner 2026-09-02): acumulativo DE POR VIDA, sin ventana. La
+// pérdida NETA desde el alta (apostado − ganado; las ganancias netean solas →
+// jamás se reembolsa plata que ganó) menos TODO lo regalado (#257e/#267) genera
+// `pct%`, y TODO lo ya cobrado se descuenta:
+//     reclamable = pct% × max(0, netoDePorVida − regalado) − cobradoDePorVida
 // Propiedades (validadas con el owner):
 //   · se ACUMULA hasta que reclame (no vence a medianoche ni el lunes);
-//   · al reclamar queda EXACTO en 0 (pct×pérdida − cobrado = 0) y lo que pierda
-//     de ahí en más suma de nuevo desde cero;
-//   · el que venía ganando no cobra: la ganancia previa resta de la base;
-//   · el bonus perdido casi no genera reembolso nuevo (5% del 5%, converge);
+//   · al reclamar queda EXACTO en 0 y lo que pierda de ahí en más suma de nuevo;
+//   · una ganancia grande resta PARA SIEMPRE (el que ganó $10M no cobra hasta
+//     perder más de $10M acumulados) — cierra el agujero de la ventana de 30
+//     días que había antes (#257: la ganancia "vencía" y sus pérdidas nuevas
+//     generaban reembolso);
+//   · el bonus regalado que se pierde no genera reembolso (se resta de la base);
 //   · tope de reclamos POR DÍA (maxDailyArs) intacto.
-// Una sola consulta de stats por evaluación.
+// Tope de 92 días de la API: acumulador PLEGADO (User.cashbackCarryNet +
+// cashbackAnchorAt) — ver abajo. Una consulta de stats por evaluación.
 // Plataforma 1girox: no hay stats anteriores a la migración.
 const CASHBACK_STATS_EPOCH = new Date('2026-07-31T00:00:00-03:00');
 const CASHBACK_FOLD_AFTER_DAYS = 85; // < 92 (tope de la API) con margen
