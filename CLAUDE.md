@@ -125,8 +125,8 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   1girox no aplique sus campañas automáticas por herencia. `/stats` trae
   `bonus.granted/still_locked` (bono OTORGADO en el rango, #274): la base de reembolsos
   es `netwin − granted` (cashback: máximo con la suma local de regalos). Manual: pedir
-  `Partner-API-Manual_v_1.15.pdf` al owner (no está en el repo; el bloque `bonus` es
-  posterior a esa versión).
+  `Partner-API-Manual_v_1.15.pdf` al owner (no está en el repo; el bloque `bonus` está
+  en la sección 2.10 del manual actualizado que mandó soporte el 2026-09-10).
 - **No hay NINGUNA sesión que renovar.** Auth por `X-Api-Key` fija en todo, incluido
   el netwin. Se fueron `ensureSession`, el mutex de login, `isHtmlBlocked` y el Bearer
   del panel (con `giroxReportsService`, eliminado el 2026-07-31).

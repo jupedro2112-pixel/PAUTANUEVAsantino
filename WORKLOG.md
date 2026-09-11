@@ -14,8 +14,9 @@
   devuelven `"bonus": { "granted", "still_locked" }` — `granted` = bono OTORGADO al
   jugador en el rango; `still_locked` = cuánto sigue con rollover sin cumplir. A nivel
   jugador (no por categoría). A nivel apuesta NO existe "qué parte fue bono" (el bono
-  entra al saldo unificado con candado). Es posterior al manual v1.15 (no figura en el
-  PDF; sección 2.10 del manual nuevo).
+  entra al saldo unificado con candado). Está documentado en la **sección 2.10**
+  ("Netwin (GGR) del jugador") del manual ACTUALIZADO que adjuntó soporte; en la copia
+  v1.15 que tenemos esa sección aún no lo muestra.
 - **giroxService:** `getPlayerStats` y `getPlayersStatsBatch` parsean `bonusGranted` /
   `bonusStillLocked` (0 si la API no lo manda). `stats-raw` los muestra en `parsed`.
 - **Cashback (`_cashbackStateToday`):** la base descuenta el MAYOR, tramo a tramo, entre

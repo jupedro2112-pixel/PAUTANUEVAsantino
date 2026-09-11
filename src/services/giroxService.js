@@ -1178,8 +1178,8 @@ function formatStatsDate(date) {
   return `${d.toLocaleDateString('en-CA', opts)} ${d.toLocaleTimeString('en-GB', { ...opts, hour12: false })}`;
 }
 
-/** Bloque `bonus` del /stats (soporte 1girox, 2026-09-10 — posterior al manual
- *  v1.15): `granted` = total de bono OTORGADO al jugador en el rango consultado;
+/** Bloque `bonus` del /stats (soporte 1girox, 2026-09-10 — sección 2.10 del
+ *  manual actualizado): `granted` = total de bono OTORGADO al jugador en el rango consultado;
  *  `still_locked` = cuánto de eso sigue con rollover sin cumplir. Va a nivel
  *  jugador (no por categoría: el bono se otorga al depositar y su rollover
  *  progresa sobre casino y sports por igual). Es el dato oficial para calcular

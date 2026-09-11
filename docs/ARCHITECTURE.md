@@ -446,7 +446,7 @@ salen de la MISMA Partner API, con la misma `X-Api-Key` y por **username**:
   VIP sin comerse el cupo de 60 req/min.
 - Devuelven `totals` + `categories.casino/sports`, cada uno con `bets_count`,
   **`wagered` (apostado)**, `payout` y `netwin` — todo en **PESOS**. Desde 2026-09-10
-  (posterior al manual v1.15) también **`bonus: { granted, still_locked }`** a nivel
+  (sección 2.10 del manual actualizado) también **`bonus: { granted, still_locked }`** a nivel
   jugador: bono OTORGADO en el rango y cuánto sigue bloqueado por rollover. El parser
   lo expone como `bonusGranted` / `bonusStillLocked` (0 si falta). Lo usan el cashback
   (máximo tramo a tramo con la suma local de regalos — `User.cashbackCarryGranted` se
