@@ -59,6 +59,8 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 - `src/utils/periodRanges.js` — rangos de fecha (ayer / semana / mes) en hora argentina.
 - `jugaygana*.js` + `referralRevenueService.js` + `jugayganaUserLinkService.js` —
   **muertos**, sin consumidores. Ver la nota de migración arriba.
+- `docs/ESPEC-REEMBOLSO-1GIROX.md` — cómo DEBE funcionar el reembolso/cashback sobre
+  plata real (fórmula, datos de la API, casos de prueba) — portable a otros repos 1girox.
 - `docs/CLONACION-PASO-A-PASO.txt` — runbook probado para clonar TODO el proyecto a
   otra cuenta AWS desde CloudShell (usa `scripts/aws-export-config.sh` +
   `scripts/aws-bootstrap-clone.sh`, etapas iam/ssm/redis/cert/eb/sg/https/deploy).

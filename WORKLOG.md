@@ -8,6 +8,16 @@
 
 ## Sesión 2026-09-11
 
+### 276. `docs/ESPEC-REEMBOLSO-1GIROX.md` — especificación portable del reembolso
+- **Pedido owner:** explicar cómo tiene que funcionar el reembolso para implementarlo
+  en sus otros repos sobre 1girox. Documento independiente del código: datos que da
+  la Partner API (`netwin`, `bonus.granted/still_locked`) y los que NO existen
+  (desglose por apuesta), fórmula de por vida con plegado de 92 días, `regalado` =
+  máximo tramo a tramo entre local y oficial, reembolsos cobrados como regalo (#275),
+  reclamo con reserva atómica + reference idempotente + bono con rollover, reembolso
+  por período, lo pedido a 1girox (`forfeited`), tabla de casos de prueba y errores
+  típicos.
+
 ### 275. Cashback: sin "reembolso del reembolso" — lo cobrado cuenta como regalo
 - **Pedido owner:** que el reembolso ya pagado, si el cliente lo pierde, NO genere
   reembolso nuevo.
