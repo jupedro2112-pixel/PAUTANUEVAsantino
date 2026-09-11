@@ -6,6 +6,39 @@
 >
 > **Última actualización: 2026-09-08**
 
+## Sesión 2026-09-11
+
+### 274. Partner API: bloque `bonus.granted` en el /stats → reembolsos sobre plata REAL con el dato oficial
+- **Contexto:** el owner le pidió a 1girox el desglose bono/real en `/stats` (#257f).
+  Respuesta de soporte (2026-09-10): `GET /players/{u}/stats` (y el batch) ahora
+  devuelven `"bonus": { "granted", "still_locked" }` — `granted` = bono OTORGADO al
+  jugador en el rango; `still_locked` = cuánto sigue con rollover sin cumplir. A nivel
+  jugador (no por categoría). A nivel apuesta NO existe "qué parte fue bono" (el bono
+  entra al saldo unificado con candado). Es posterior al manual v1.15 (no figura en el
+  PDF; sección 2.10 del manual nuevo).
+- **giroxService:** `getPlayerStats` y `getPlayersStatsBatch` parsean `bonusGranted` /
+  `bonusStillLocked` (0 si la API no lo manda). `stats-raw` los muestra en `parsed`.
+- **Cashback (`_cashbackStateToday`):** la base descuenta el MAYOR, tramo a tramo, entre
+  nuestra suma local de regalos (#257e/#267) y el `granted` oficial: `User.
+  cashbackCarryGranted` se pliega junto con `cashbackCarryNet` (mismo update atómico) y
+  la suma local se parte en < ancla / ≥ ancla. Por qué el máximo y no reemplazar: el
+  oficial cubre lo que NO vemos (bonos dados a mano en el panel de 1girox, campañas de
+  la plataforma) pero NO cubre los regalos que fueron como DEPÓSITO (todo lo anterior
+  a #266 del 2026-09-07 y el fallback "bono activo" de `creditGift`). Log `[cashback]
+  regalos: local vs plataforma` cuando difieren; el status expone `giftedLocal /
+  giftedPlatform / giftedLife`.
+- **Reembolso semanal/mensual (status + claim):** `netLoss = max(0, casinoNetwin −
+  bonusGranted)` del período. Antes no descontaba ningún bono (feature dormida bajo el
+  casino). Imprecisión aceptada: un bono otorgado la semana anterior y perdido esta
+  semana no se descuenta (la plataforma solo da "otorgado en el rango").
+- **No tocado:** comisiones de referidos (8% del netwin, incluyen bonos perdidos —
+  decisión de negocio pendiente); `still_locked` no se usa (un bono con rollover sin
+  cumplir sigue en el saldo; descontar el `granted` completo es lo conservador).
+- **Validado:** `node --check` OK (server.js, giroxService.js, User.js). Back necesita
+  redeploy. PROBAR: `GET /api/admin/girox/stats-raw?username=X&days=30` → `parsed.
+  bonusGranted` > 0 en un usuario con bonos recientes; log `[cashback] regalos` en un
+  reclamo.
+
 ## Sesión 2026-09-09
 
 ### 273. Chat del cliente: sin SONIDO al responder el agente + el mensaje nuevo no bajaba solo

@@ -625,6 +625,9 @@ const userSchema = new mongoose.Schema({
   // para siempre y nunca se reembolsa plata que el jugador ganó.
   cashbackAnchorAt: { type: Date, default: null },
   cashbackCarryNet: { type: Number, default: 0 },
+  // #274: bono OTORGADO (dato oficial `bonus.granted` del /stats) de los tramos
+  // ya plegados — mismo plegado que cashbackCarryNet.
+  cashbackCarryGranted: { type: Number, default: 0 },
   dailyRouletteWonAt: { type: Date, default: null },
 
   // Plan de notificaciones elegido en la encuesta inicial (app instalada).

@@ -7652,11 +7652,13 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     // ⚠️ `netwin` POSITIVO = el jugador perdió (lo que se reembolsa). Negativo = ganó
     // en el período → no hay nada que devolver, se corta en 0.
     // Se usa SÓLO el netwin de CASINO (decisión del owner; sports queda afuera).
-    const _loss = (r) => (r.success ? Math.max(0, Number(r.casinoNetwin) || 0) : 0);
+    // #274: se descuenta el BONO OTORGADO en el período (`bonus.granted`, dato
+    // oficial de la plataforma) → reembolso solo sobre plata real del jugador.
+    const _loss = (r) => (r.success ? Math.max(0, (Number(r.casinoNetwin) || 0) - (Number(r.bonusGranted) || 0)) : 0);
     const weeklyNetLoss = _loss(wN);
     const monthlyNetLoss = _loss(mN);
 
-    logger.info(`[REFUND] status — ${username} NETWIN(casino) weekly:${wN.casinoNetwin}→${weeklyNetLoss} monthly:${mN.casinoNetwin}→${monthlyNetLoss}`);
+    logger.info(`[REFUND] status — ${username} NETWIN(casino) weekly:${wN.casinoNetwin}−bono ${wN.bonusGranted || 0}→${weeklyNetLoss} monthly:${mN.casinoNetwin}−bono ${mN.bonusGranted || 0}→${monthlyNetLoss}`);
 
     // RANGOS: el porcentaje sale de cuánto perdió EN ESE PERÍODO, no de una config
     // fija ni de un acumulado histórico. Ver src/utils/refundTiers.js. Cada período
@@ -7800,9 +7802,10 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
         return res.json({ success: false, message: 'No pudimos calcular tu pérdida en este momento (la plataforma está demorada). Probá en unos minutos.', canClaim: true });
       }
       // netwin POSITIVO = el jugador perdió. Sólo casino (decisión del owner).
-      const netLoss = Math.max(0, Number(netRes.casinoNetwin) || 0);
+      // #274: menos el bono otorgado en el período (dato oficial) → plata real.
+      const netLoss = Math.max(0, (Number(netRes.casinoNetwin) || 0) - (Number(netRes.bonusGranted) || 0));
       logger.info('[REFUND] weekly — usuario:', username, 'apostado:', netRes.wagered,
-        'pagado:', netRes.payout, 'netwin(casino):', netRes.casinoNetwin, 'netLoss:', netLoss);
+        'pagado:', netRes.payout, 'netwin(casino):', netRes.casinoNetwin, 'bono otorgado:', netRes.bonusGranted || 0, 'netLoss:', netLoss);
 
       // El propio stats devuelve el ID numérico del jugador: se guarda de paso,
       // sin gastar una request extra. Lo usan el panel y los reportes.
@@ -7970,9 +7973,10 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
         return res.json({ success: false, message: 'No pudimos calcular tu pérdida en este momento (la plataforma está demorada). Probá en unos minutos.', canClaim: true });
       }
       // netwin POSITIVO = el jugador perdió. Sólo casino (decisión del owner).
-      const netLoss = Math.max(0, Number(netRes.casinoNetwin) || 0);
+      // #274: menos el bono otorgado en el período (dato oficial) → plata real.
+      const netLoss = Math.max(0, (Number(netRes.casinoNetwin) || 0) - (Number(netRes.bonusGranted) || 0));
       logger.info('[REFUND] monthly — usuario:', username, 'apostado:', netRes.wagered,
-        'pagado:', netRes.payout, 'netwin(casino):', netRes.casinoNetwin, 'netLoss:', netLoss);
+        'pagado:', netRes.payout, 'netwin(casino):', netRes.casinoNetwin, 'bono otorgado:', netRes.bonusGranted || 0, 'netLoss:', netLoss);
 
       // El propio stats devuelve el ID numérico del jugador: se guarda de paso,
       // sin gastar una request extra. Lo usan el panel y los reportes.
@@ -11889,7 +11893,8 @@ app.get('/api/admin/girox/stats-raw', authMiddleware, adminMiddleware, async (re
     const from = new Date(Date.now() - days * 86400000);
     const r = await girox.getPlayerStats(username, from, to, 'stats-raw', { fresh: true, includeRaw: true });
     if (!r.success) return res.status(502).json({ error: r.error || 'stats falló' });
-    res.json({ parsed: { netwin: r.netwin, casinoNetwin: r.casinoNetwin, wagered: r.wagered, payout: r.payout }, raw: r.raw });
+    res.json({ parsed: { netwin: r.netwin, casinoNetwin: r.casinoNetwin, wagered: r.wagered, payout: r.payout,
+      bonusGranted: r.bonusGranted, bonusStillLocked: r.bonusStillLocked }, raw: r.raw });
   } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
 });
 
@@ -12111,7 +12116,7 @@ async function _cashbackStateToday(userId, username, opts) {
   const dayTo = new Date(today.toEpoch * 1000);
 
   // ANCLA de por vida: desde el alta del usuario (o la migración a 1girox).
-  const uDoc = await User.findOne({ id: userId }).select('createdAt cashbackAnchorAt cashbackCarryNet').lean();
+  const uDoc = await User.findOne({ id: userId }).select('createdAt cashbackAnchorAt cashbackCarryNet cashbackCarryGranted').lean();
   if (!uDoc) return { enabled: true, error: 'user_not_found' };
   let anchor = uDoc.cashbackAnchorAt ? new Date(uDoc.cashbackAnchorAt) : null;
   if (!anchor) {
@@ -12121,6 +12126,7 @@ async function _cashbackStateToday(userId, username, opts) {
     ));
   }
   let carry = Number(uDoc.cashbackCarryNet) || 0;
+  let carryGranted = Number(uDoc.cashbackCarryGranted) || 0; // #274
 
   // PLEGADO: si el tramo vivo supera el tope de la API, se consolida el tramo
   // más viejo dentro de carryNet y el ancla avanza. Atómico por condición sobre
@@ -12133,18 +12139,21 @@ async function _cashbackStateToday(userId, username, opts) {
     const foldRes = await girox.getPlayerStats(username, anchor, foldTo, 'cashback-fold');
     if (!foldRes.success) return { enabled: true, error: foldRes.error || 'stats_failed' };
     const chunkNet = Number(foldRes.casinoNetwin) || 0;
+    const chunkGranted = Number(foldRes.bonusGranted) || 0;
     const upd = await User.updateOne(
       { id: userId, cashbackAnchorAt: uDoc.cashbackAnchorAt || null },
-      { $inc: { cashbackCarryNet: chunkNet }, $set: { cashbackAnchorAt: mid } }
+      { $inc: { cashbackCarryNet: chunkNet, cashbackCarryGranted: chunkGranted }, $set: { cashbackAnchorAt: mid } }
     );
     if (!upd.modifiedCount) { // otra instancia plegó primero → releer y seguir
-      const re = await User.findOne({ id: userId }).select('cashbackAnchorAt cashbackCarryNet').lean();
+      const re = await User.findOne({ id: userId }).select('cashbackAnchorAt cashbackCarryNet cashbackCarryGranted').lean();
       anchor = re && re.cashbackAnchorAt ? new Date(re.cashbackAnchorAt) : mid;
       carry = (re && Number(re.cashbackCarryNet)) || carry;
+      carryGranted = (re && Number(re.cashbackCarryGranted)) || carryGranted;
       uDoc.cashbackAnchorAt = re && re.cashbackAnchorAt;
       continue;
     }
     carry += chunkNet;
+    carryGranted += chunkGranted;
     anchor = mid;
     uDoc.cashbackAnchorAt = mid;
     logger.info(`[cashback] fold ${username}: +$${chunkNet} al carry (total $${carry}), ancla → ${mid.toISOString().slice(0, 10)}`);
@@ -12174,16 +12183,33 @@ async function _cashbackStateToday(userId, username, opts) {
   // fueguito + reembolsos semanal/mensual + rakeback + nivel VIP + comisiones de
   // referidos. Si el cliente pierde plata que le regalamos, no se le reembolsa.
   const GIFT_TX_TYPES = ['bonus', 'fire_reward', 'refund', 'rakeback', 'vip_levelup', 'referral_commission'];
+  // #274: la suma local se parte en "tramo plegado" (< ancla) y "tramo vivo"
+  // (≥ ancla) para compararla tramo a tramo con el dato OFICIAL de la plataforma.
+  const _giftExpr = { $add: [
+    { $cond: [{ $eq: ['$type', 'deposit'] }, { $ifNull: ['$bonus', 0] }, 0] },
+    { $cond: [{ $and: [{ $in: ['$type', GIFT_TX_TYPES] }, { $ne: ['$metadata.source', 'instant_cashback'] }] }, '$amount', 0] }
+  ] };
   const giftAgg = await Transaction.aggregate([
     { $match: { userId: String(userId), type: { $in: ['deposit', ...GIFT_TX_TYPES] }, timestamp: { $gte: _giftFrom } } },
     { $group: { _id: null,
-        depBonus: { $sum: { $cond: [{ $eq: ['$type', 'deposit'] }, { $ifNull: ['$bonus', 0] }, 0] } },
-        bonusCredits: { $sum: { $cond: [
-          { $and: [{ $in: ['$type', GIFT_TX_TYPES] }, { $ne: ['$metadata.source', 'instant_cashback'] }] },
-          '$amount', 0] } } } }
+        before: { $sum: { $cond: [{ $lt: ['$timestamp', anchor] }, _giftExpr, 0] } },
+        live:   { $sum: { $cond: [{ $gte: ['$timestamp', anchor] }, _giftExpr, 0] } } } }
   ]);
-  const giftedLife = ((giftAgg && giftAgg[0] && giftAgg[0].depBonus) || 0) +
-                     ((giftAgg && giftAgg[0] && giftAgg[0].bonusCredits) || 0);
+  const giftedLocalBefore = (giftAgg && giftAgg[0] && giftAgg[0].before) || 0;
+  const giftedLocalLive = (giftAgg && giftAgg[0] && giftAgg[0].live) || 0;
+  const giftedLocal = giftedLocalBefore + giftedLocalLive;
+  // DATO OFICIAL (#274, soporte 1girox 2026-09-10): `bonus.granted` del /stats =
+  // bono otorgado en el rango. Cubre lo que NO está en nuestra base (bonos dados
+  // a mano desde el panel de 1girox, campañas de la plataforma) pero NO cubre los
+  // regalos que fueron como DEPÓSITO (todo lo anterior al 2026-09-07 #266 y el
+  // fallback "bono activo" de creditGift). Por eso se toma, TRAMO A TRAMO, el
+  // MAYOR de los dos: nunca se reembolsa un regalo que alguno de los dos vio.
+  const liveGranted = Number(liveRes.bonusGranted) || 0;
+  const giftedPlatform = carryGranted + liveGranted;
+  const giftedLife = Math.max(giftedLocalBefore, carryGranted) + Math.max(giftedLocalLive, liveGranted);
+  if (Math.abs(giftedLocal - giftedPlatform) > 1) {
+    logger.info(`[cashback] ${username} regalos: local $${giftedLocal} (plegado ${giftedLocalBefore} + vivo ${giftedLocalLive}) vs plataforma $${giftedPlatform} (plegado ${carryGranted} + vivo ${liveGranted}) → base descuenta $${giftedLife}`);
+  }
   const lossLife = Math.max(0, lifeNet - giftedLife);
 
   // Cobrado de POR VIDA (pendiente + acreditado — los pendientes cierran la
@@ -12203,6 +12229,7 @@ async function _cashbackStateToday(userId, username, opts) {
     maxDailyArs: cfg.maxDailyArs, dateKey: today.dateStr,
     // netwinToday: nombre legacy del widget — pérdida NETA acumulada de por vida.
     netwinToday: lossLife, netwinLife: lossLife,
+    giftedLife, giftedLocal, giftedPlatform, // #274 diagnóstico (panel/logs)
     paidMonth: paidLife, paidToday, reclamable,
     belowMin: reclamable > 0 && reclamable < cfg.minArs
   };
