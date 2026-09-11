@@ -161,12 +161,27 @@ agregan: cambiar esa única línea y dejar de descontar bonos no jugados.
 | Carga $20k, regalo $20k, pierde $40k, pct 5% | reclamable **$1.000** (no $2.000) |
 | Gana $10M, después pierde $4M | **$0** (neto de por vida −6M) |
 | Pierde $100k, cobra $5k, pierde esos $5k | **$0** (sin reembolso del reembolso) |
-| Pierde $100k, cobra $5k, pierde $100k más | **$5.000** |
+| (continúa el anterior: ya perdió los $5k del reembolso) pierde $100k más de plata real | **$5.000** (neto 205k − 5k regalo = 200k → 10k − 5k cobrados). Si el reembolso siguiera en el saldo (no lo perdió) y perdiera $100k reales: **$4.750** — efecto conservador de 3.2 |
 | Regalo $20k todavía bloqueado (no jugado), pierde $10k reales | **$0** hasta que pierda más de $20k (conservador) |
 | Doble click en RECLAMAR | un solo pago (índice único + reference idempotente) |
 | Timeout de la API al acreditar, reintento | un solo pago (`duplicate:true`) |
 | Bono dado a mano en el panel de 1girox (no está en nuestra base) | igual se descuenta (`granted`) |
 | 100 días desde el alta | plegado: un tramo de 60 días al carry, ancla avanza |
+
+## 7b. Antes de ENCENDER en producción (checklist)
+- Época propia: el acumulado arranca en el alta del jugador o en la fecha en que ESE
+  proyecto empezó en 1girox (no copiar la de otro repo).
+- Rate limit (60 req/min por key; 30 para keys de publicista): cache del netwin ~90 s
+  por jugador en el status, cooldown de 30 s en "actualizar", máximo 3 consultas por
+  evaluación (plegado). El status lo consulta la PWA seguido.
+- Bonus de las cargas del agente contado UNA sola vez: si el proyecto lo registra en
+  el campo `bonus` del depósito Y como Transaction `bonus` aparte, excluir una de las
+  dos de `regalado` (y testearlo).
+- `stats-raw` de un jugador con bonos recientes → `bonusGranted > 0` (si da 0, la API
+  aún no lo manda; el descuento local sigue actuando).
+- Si el proyecto tiene reembolso DIARIO: con el cashback en vivo queda redundante y
+  apila reembolsos sobre la misma pérdida — recomendación: eliminarlo (stub "ya no
+  está disponible" para PWAs cacheadas).
 
 ## 8. Errores típicos a evitar
 - Multiplicar montos ×100 (1girox trabaja en PESOS).
