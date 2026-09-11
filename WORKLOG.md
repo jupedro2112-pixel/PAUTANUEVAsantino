@@ -8,6 +8,23 @@
 
 ## Sesión 2026-09-11
 
+### 275. Cashback: sin "reembolso del reembolso" — lo cobrado cuenta como regalo
+- **Pedido owner:** que el reembolso ya pagado, si el cliente lo pierde, NO genere
+  reembolso nuevo.
+- **Antes:** la suma local de regalos excluía los `instant_cashback` (nota de #257: "el
+  bonus perdido ≈ 5% del 5%, converge, despreciable"). Con eso, perder $C de reembolso
+  subía la base $C → cobraba pct×C otra vez (chico, pero existía).
+- **Ahora (`_cashbackStateToday`):** los reclamos de cashback (`type:'bonus'`,
+  `metadata.source:'instant_cashback'`) suman a `giftedLocal` como cualquier regalo →
+  al perderlos, `lifeNet+C` y `gifted+C` se cancelan → $0. Queda alineado con el
+  `granted` oficial de la plataforma (#274), que también los cuenta porque van por
+  `/bonus`. La fórmula final:
+  `reclamable = pct × max(0, netoDePorVida − TODO lo regalado incl. reembolsos) − cobrado`.
+- **Efecto colateral aceptado:** si después de cobrar $C el cliente pierde $C de plata
+  REAL (no el reembolso), tampoco cobra por esos $C — la plataforma no distingue cuál
+  de los dos perdió (saldo unificado), y se elige el lado conservador para la casa.
+- **Validado:** `node --check` OK. Back necesita redeploy (junto con #274).
+
 ### 274. Partner API: bloque `bonus.granted` en el /stats → reembolsos sobre plata REAL con el dato oficial
 - **Contexto:** el owner le pidió a 1girox el desglose bono/real en `/stats` (#257f).
   Respuesta de soporte (2026-09-10): `GET /players/{u}/stats` (y el batch) ahora

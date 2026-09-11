@@ -12170,10 +12170,9 @@ async function _cashbackStateToday(userId, username, opts) {
   // 10% de su plata real. El netwin de la plataforma no distingue plata propia
   // de bonos → se descuentan de la base TODOS los bonos regalados desde la
   // época 1girox: `bonus` de los depósitos (ruleta %, 1ª carga, bonus del
-  // agente) + Transactions type 'bonus' (ruleta cash, fueguito, bono manual),
-  // EXCEPTO los propios reclamos de cashback (esos ya se descuentan por
-  // `paidLife` — y si el cliente los pierde, netean solos: pierde $C de bonus
-  // regalado → lifeNet+C y gifted+C se cancelan → cero reembolso del regalo).
+  // agente) + Transactions type 'bonus' (ruleta cash, fueguito, bono manual)
+  // + (desde #275) los propios reclamos de cashback: pierde $C de cualquier
+  // regalo → lifeNet+C y gifted+C se cancelan → cero reembolso del regalo.
   const _giftFrom = new Date(Math.max(
     uDoc.createdAt ? new Date(uDoc.createdAt).getTime() : CASHBACK_STATS_EPOCH.getTime(),
     CASHBACK_STATS_EPOCH.getTime()
@@ -12185,9 +12184,15 @@ async function _cashbackStateToday(userId, username, opts) {
   const GIFT_TX_TYPES = ['bonus', 'fire_reward', 'refund', 'rakeback', 'vip_levelup', 'referral_commission'];
   // #274: la suma local se parte en "tramo plegado" (< ancla) y "tramo vivo"
   // (≥ ancla) para compararla tramo a tramo con el dato OFICIAL de la plataforma.
+  // #275 (owner: "evitamos reembolso del reembolso"): los reembolsos YA COBRADOS
+  // (instant_cashback) también cuentan como regalo. Antes se excluían ("5% del
+  // 5%, despreciable"): si el cliente perdía los $C del reembolso, la base subía
+  // $C y cobraba pct×C de nuevo. Ahora: pierde $C de reembolso → lifeNet+C y
+  // gifted+C se cancelan → $0. Coincide con el `granted` de la plataforma (que
+  // también los cuenta, porque van por /bonus).
   const _giftExpr = { $add: [
     { $cond: [{ $eq: ['$type', 'deposit'] }, { $ifNull: ['$bonus', 0] }, 0] },
-    { $cond: [{ $and: [{ $in: ['$type', GIFT_TX_TYPES] }, { $ne: ['$metadata.source', 'instant_cashback'] }] }, '$amount', 0] }
+    { $cond: [{ $in: ['$type', GIFT_TX_TYPES] }, '$amount', 0] }
   ] };
   const giftAgg = await Transaction.aggregate([
     { $match: { userId: String(userId), type: { $in: ['deposit', ...GIFT_TX_TYPES] }, timestamp: { $gte: _giftFrom } } },
