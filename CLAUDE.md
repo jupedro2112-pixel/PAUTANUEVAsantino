@@ -122,8 +122,11 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 - **Partner API v1.15 (2026-09-04):** `/session` va con `embed:true` (el casino oculta
   sus controles de sesión en el iframe — NO sacarlo, es el fix del usuario cruzado) y
   devuelve `logout_url`. Todo depósito SIN bono nuestro lleva `no_bonus:true` para que
-  1girox no aplique sus campañas automáticas por herencia. `/stats` sigue sin separar
-  bono de real. Manual: pedir `Partner-API-Manual_v_1.15.pdf` al owner (no está en el repo).
+  1girox no aplique sus campañas automáticas por herencia. `/stats` trae
+  `bonus.granted/still_locked` (bono OTORGADO en el rango, #274): la base de reembolsos
+  es `netwin − granted` (cashback: máximo con la suma local de regalos). Manual: pedir
+  `Partner-API-Manual_v_1.15.pdf` al owner (no está en el repo; el bloque `bonus` es
+  posterior a esa versión).
 - **No hay NINGUNA sesión que renovar.** Auth por `X-Api-Key` fija en todo, incluido
   el netwin. Se fueron `ensureSession`, el mutex de login, `isHtmlBlocked` y el Bearer
   del panel (con `giroxReportsService`, eliminado el 2026-07-31).
