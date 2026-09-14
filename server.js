@@ -1096,6 +1096,9 @@ function parseRequestHost(req) {
   return rawHost.split(':')[0].toLowerCase();
 }
 
+// Umbral de renovación de la sesión del panel (ver authMiddleware, #277).
+const ADMIN_SESSION_SLIDE_MS = 3 * 60 * 60 * 1000;
+
 // Helper: build the Set-Cookie header values for the admin session cookies.
 // Returns an array: [page-scoped cookie, api-scoped cookie].
 function buildAdminSessionCookieHeaders(token) {
@@ -2877,7 +2880,13 @@ app.post('/api/hgcash/webhook', async (req, res) => {
       const expected = crypto.createHmac('sha256', secret).update(raw, 'utf8').digest('hex');
       const provided = sigHeader.toLowerCase().startsWith('sha256=') ? sigHeader.slice(7).toLowerCase() : sigHeader.toLowerCase();
       if (!safeCompare(expected, provided)) {
-        logger.warn('[hgcash] webhook con firma inválida — rechazado');
+        // #277: ~2.000 rechazos/día en los logs del 13-14/09 sin saber de dónde
+        // vienen. Se loguea el origen (IP, X-Forwarded-By del fan-out de otro
+        // proyecto, UA, id/monto del payload) para identificar al emisor.
+        try {
+          const b = req.body || {};
+          logger.warn(`[hgcash] webhook con firma inválida — rechazado (ip=${req.ip} fwdBy=${req.get('X-Forwarded-By') || '-'} ua=${String(req.get('User-Agent') || '-').slice(0, 40)} id=${b.id || b.movementId || '-'} amount=${b.amount != null ? b.amount : '-'} type=${b.type || b.eventType || b.topic || '-'} sig=${provided ? 'sí' : 'NO'})`);
+        } catch (_) { logger.warn('[hgcash] webhook con firma inválida — rechazado'); }
         return res.status(401).json({ error: 'firma inválida' });
       }
     } else {
@@ -3185,6 +3194,22 @@ const authMiddleware = async (req, res, next) => {
     }
     
     req.user = decoded;
+
+    // SESIÓN DESLIZANTE del panel (#277, owner: "después de un rato se cierra la
+    // sesión de los agentes"): la cookie vencía a las 8 h FIJAS desde el login,
+    // en medio del turno. Ahora, si el request vino por la cookie admin y le
+    // quedan menos de 3 h, se reemiten las cookies con 8 h nuevas. Un agente
+    // ACTIVO nunca se desloguea; uno inactivo 8 h sí (mismo criterio de antes).
+    try {
+      if (!req.headers.authorization && isAdminRole(decoded.role) && decoded.exp &&
+          (decoded.exp * 1000 - Date.now()) < ADMIN_SESSION_SLIDE_MS) {
+        const renewed = jwt.sign(
+          { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion ?? 0 },
+          JWT_SECRET, { expiresIn: '8h' }
+        );
+        res.setHeader('Set-Cookie', buildAdminSessionCookieHeaders(renewed));
+      }
+    } catch (_) { /* nunca romper el request por la renovación */ }
 
     // Lockdown del rol publisher_admin: sólo puede tocar las rutas listadas en
     // PUBLISHER_ADMIN_ALLOWED_PATHS. Cualquier otra ruta devuelve 403, así no
@@ -4828,6 +4853,9 @@ app.get('/api/admin/me', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '8h' }
     );
+    // #277: cada /me renueva también las cookies (8 h desde AHORA). El panel lo
+    // llama al cargar y cada 30 min → sesión deslizante mientras esté abierto.
+    try { res.setHeader('Set-Cookie', buildAdminSessionCookieHeaders(freshToken)); } catch (_) {}
     res.json({
       user: {
         id: user.id,

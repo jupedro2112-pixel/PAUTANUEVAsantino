@@ -433,6 +433,7 @@ async function handleLogin(e) {
             // Luego intentar cargar datos (con manejo de errores)
             try {
                 initSocket();
+                startAdminTokenRefresh(); // #277
             } catch (e) {
             }
 
@@ -486,6 +487,7 @@ async function checkAdminSession() {
             loadCommands();
             // Iniciar reconciliación periódica de conversaciones
             startConversationReconciliation();
+            startAdminTokenRefresh(); // #277
         } else {
             showLogin();
         }
@@ -493,6 +495,33 @@ async function checkAdminSession() {
         console.error('Session check error:', error);
         showLogin();
     }
+}
+
+// #277 — SESIÓN DESLIZANTE: cada 30 min se pide /api/admin/me. El server
+// renueva las cookies (8 h desde ahora) y devuelve un token fresco para el
+// socket/fetches. NO recrea el socket ni recarga nada: solo actualiza el token.
+// Antes la cookie vencía 8 h después del LOGIN, en medio del turno, y el agente
+// tenía que volver a entrar. Si /me da 401 (cookie realmente vencida o sesión
+// revocada) → pantalla de login, igual que antes.
+let _adminTokenRefreshTimer = null;
+async function refreshAdminToken(reauthSocket) {
+    try {
+        const response = await fetch(`${API_URL}/api/admin/me`, {
+            credentials: 'include',
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (response.status === 401 || response.status === 403) { showLogin(); return; }
+        if (!response.ok) return; // error transitorio: se reintenta en el próximo tick
+        const data = await response.json();
+        if (data && data.token) {
+            currentToken = data.token;
+            if (reauthSocket && socket && socket.connected) socket.emit('authenticate', currentToken);
+        }
+    } catch (e) { /* red caída: no desloguear, el próximo tick reintenta */ }
+}
+function startAdminTokenRefresh() {
+    if (_adminTokenRefreshTimer) clearInterval(_adminTokenRefreshTimer);
+    _adminTokenRefreshTimer = setInterval(() => refreshAdminToken(false), 30 * 60 * 1000);
 }
 
 function handleLogout() {
@@ -1206,6 +1235,10 @@ function initSocket() {
             joinAdminRoom();
         } else {
             console.error('❌ Socket authentication failed');
+            // #277: el token en memoria venció (8 h) → pedir uno nuevo con la
+            // cookie (que el server renueva sola) y re-autenticar el socket.
+            // Si la cookie también venció, refreshAdminToken muestra el login.
+            refreshAdminToken(true);
         }
     });
     

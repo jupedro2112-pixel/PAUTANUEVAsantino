@@ -183,6 +183,11 @@ function isEnabled() {
 }
 
 const TIMEOUT_MS = Number(process.env.GIROX_TIMEOUT_MS || 20000);
+// #277: el batch de stats de ~100 jugadores por un mes tardaba > 20 s en la
+// plataforma (171 timeouts ECONNABORTED en un día, ×3 reintentos, en el tick
+// VIP). Se parte en grupos más chicos y con más margen de tiempo.
+const STATS_BATCH_CHUNK = Math.max(5, Math.min(100, Number(process.env.GIROX_STATS_BATCH_CHUNK || 40)));
+const STATS_BATCH_TIMEOUT_MS = Number(process.env.GIROX_STATS_BATCH_TIMEOUT_MS || 45000);
 
 // Reintentos ante fallas transitorias (5xx / timeout / red / 429).
 // La doc recomienda backoff 2s, 5s, 15s reusando SIEMPRE la misma reference.
@@ -350,7 +355,7 @@ function _parseRetryAfter(headers) {
  * @param {boolean} [opts.readOnly]     lectura pura → si hay key de consultas y la request
  *                                      iría por la MASTER, firma con la de consultas (cupo aparte)
  */
-async function _request({ method, path, body, label, retryable = true, username = null, apiKey = null, readOnly = false }) {
+async function _request({ method, path, body, label, retryable = true, username = null, apiKey = null, readOnly = false, timeoutMs = 0 }) {
   if (!isEnabled()) {
     logger.error('[girox] GIROX_API_URL / GIROX_API_KEY no configurados');
     return { ok: false, error: 'La plataforma no está configurada. Avisale al soporte.', code: 'not_configured', httpStatus: null };
@@ -388,7 +393,7 @@ async function _request({ method, path, body, label, retryable = true, username 
         url,
         data: body,
         headers: _headers(keyOverride),
-        timeout: TIMEOUT_MS,
+        timeout: timeoutMs || TIMEOUT_MS,
         proxy: false
       });
       return { ok: true, data: resp.data || {}, httpStatus: resp.status };
@@ -1312,14 +1317,22 @@ async function getPlayersStatsBatch(usernames, fromDate, toDate, label = 'stats-
 
   const players = {};
   const notFound = [];
+  // #277: cada grupo (por key) se parte en tandas de STATS_BATCH_CHUNK y cada
+  // request lleva STATS_BATCH_TIMEOUT_MS — la plataforma tardaba > 20 s con
+  // ~100 jugadores por un mes y el tick VIP se comía 3 timeouts por tanda.
+  const chunks = [];
   for (const [gk, groupList] of groups) {
+    for (let i = 0; i < groupList.length; i += STATS_BATCH_CHUNK) chunks.push([gk, groupList.slice(i, i + STATS_BATCH_CHUNK)]);
+  }
+  for (const [gk, groupList] of chunks) {
     const r = await _request({
       method: 'post',
       path: '/players/stats/batch',
       body: { usernames: groupList, from, to },
       label: `${label}(${groupList.length} jugadores${gk ? ', key publicista' : ''}, ${from} → ${to})`,
       apiKey: gk || null,
-      readOnly: true
+      readOnly: true,
+      timeoutMs: STATS_BATCH_TIMEOUT_MS
     });
 
     // Si UN grupo falla, falla todo el batch (mismo contrato de antes: el caller

@@ -256,8 +256,10 @@ modelos); sus migraciones corren únicamente si algo llamara a ese connectDB.
 - Secrets: `loadSecretsFromSSM()` en el bootstrap async → NUNCA leer secrets al
   require; leerlos en runtime.
 - Cookies admin: `admin_session` (Path=/adminprivado2026) + `admin_api_session`
-  (Path=/api), 8h, SameSite=Strict. `GET /api/admin/me` revalida la cookie contra DB
-  y devuelve un token fresco para Socket.IO.
+  (Path=/api), 8h **deslizantes** (#277: authMiddleware las reemite cuando quedan < 3 h;
+  `/api/admin/me` siempre las reemite y el panel lo llama cada 30 min →
+  `refreshAdminToken`), SameSite=Strict. `GET /api/admin/me` revalida la cookie contra
+  DB y devuelve un token fresco para Socket.IO.
 - Rate limiting: `generalLimiter` 300/min (keyed por cookie de sesión admin o IP; en
   memoria), `authLimiter` 10/min y `sensitiveLimiter` 10/15min (Redis compartido con
   fallback a memoria — `RedisBackedRateStore`), `smsIpLimiter`/`bulkSmsIpLimiter`/

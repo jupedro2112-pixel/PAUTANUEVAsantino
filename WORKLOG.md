@@ -6,6 +6,52 @@
 >
 > **Última actualización: 2026-09-08**
 
+## Sesión 2026-09-14
+
+### 277. "Anda lento, la carga automática tarda y a los agentes se les cierra la sesión" — análisis de logs EB (13-14/09) + 4 fixes
+- **Logs analizados:** bundles de las 2 instancias del entorno viejo (`/pautomaticonar/prod/`,
+  35 h). Boot sano (SSM 35, Mongo OK, Redis adapter OK), sin OOM ni reinicios.
+- **Hallazgo 1 — sesión de los agentes:** la cookie del panel vencía a las **8 h fijas
+  desde el login** (en medio del turno); el token en memoria del socket también. Los
+  logs lo confirman: AgenteLujan conectado 09→17 del 13/09 y re-login al día siguiente.
+  **Fix:** sesión DESLIZANTE — `authMiddleware` reemite las cookies (8 h nuevas) cuando
+  al request por cookie le quedan < 3 h (`ADMIN_SESSION_SLIDE_MS`); `/api/admin/me`
+  siempre reemite cookies; el panel llama `refreshAdminToken()` cada 30 min (solo
+  actualiza `currentToken`, NO recrea el socket) y, si el socket responde
+  `authenticated:false`, pide token nuevo y re-autentica en vez de quedarse mudo. Un
+  agente activo no se desloguea nunca; inactivo 8 h sí. **admin-sw → v52.**
+- **Hallazgo 2 — Partner API lenta en batches:** 171 timeouts `ECONNABORTED 20000ms` en
+  un día en `vip-cur` (batch de ~97 jugadores de un publicista por un mes) ×3 reintentos
+  → el tick VIP se comía minutos y ocupaba la ventana local de la key del publicista
+  (30/min) → lecturas de saldo de esos jugadores esperaban `rate_limited_local`.
+  **Fix:** `getPlayersStatsBatch` parte cada grupo en tandas de `GIROX_STATS_BATCH_CHUNK`
+  (default 40) con timeout propio `GIROX_STATS_BATCH_TIMEOUT_MS` (45 s); `_request`
+  acepta `timeoutMs`.
+- **Hallazgo 3 — webhook hgcash con firma inválida: ~2.100 por instancia en 35 h**
+  (2/min, pico 120/h de madrugada; los válidos son ~10-20/h). No es hgcash reintentando
+  (los válidos entran y la auto-carga acredita en < 1 min: comprobante → movimiento →
+  OK). Sospecha: OTRO proyecto del owner con `HGCASH_FANOUT_URL` apuntando a este
+  dominio (reenvía sus webhooks firmados con SU secreto; 401 acá; el fan-out reintenta a
+  los 15 s → se duplica). Inofensivo pero ruidoso. **Fix:** el rechazo ahora loguea
+  ip / `X-Forwarded-By` / UA / id / monto / tipo para identificar al emisor con el
+  próximo bundle. Revisar la env `HGCASH_FANOUT_URL` de autoreembolsos/otros clones.
+- **Hallazgo 4 — panel de AgenteLujan:** 2.293 "Admin connected" en un día, un socket
+  NUEVO cada **15-16 s exactos** (~200/h) = la página del panel se RECARGA cada 15 s
+  (DOMContentLoaded → checkAdminSession → initSocket). No hay ningún `reload` en nuestro
+  código ni en el SW: es algo del navegador/dispositivo de ese agente (extensión de
+  auto-refresh, pestaña que se descarta y restaura, panel embebido). Cada recarga
+  descarga chats+stats+comandos y ese agente ve "Cargando mensajes…" permanente. Pedirle
+  al agente que revise extensiones / abra el panel en Chrome normal. Otros agentes
+  (Ceci, Daisy, Pagos*) tienen conexiones normales.
+- **Descartado:** rate limit 429 (0 en logs), Mongo (índices de Message OK, query con
+  límite 50), IA de comprobantes (sin errores; sin logs de latencia — el modelo es
+  haiku con timeout 30 s), Redis. El "movimiento SIN match / comprobante SIN movimiento"
+  frecuente es calidad de matching (monto/nombre), no lentitud.
+- **Validado:** `node --check` OK (server.js, giroxService.js, admin.js, admin-sw.js).
+  Back necesita redeploy en el entorno viejo (y en el nuevo). PROBAR: agente logueado
+  > 8 h sin volver a entrar; log `[hgcash] webhook con firma inválida — rechazado (ip=…
+  fwdBy=…)` en el próximo bundle; menos `ECONNABORTED` en `vip-cur`.
+
 ## Sesión 2026-09-11
 
 ### 276. `docs/ESPEC-REEMBOLSO-1GIROX.md` — especificación portable del reembolso
