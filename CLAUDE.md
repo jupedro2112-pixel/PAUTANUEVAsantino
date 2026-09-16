@@ -59,6 +59,8 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 - `src/utils/periodRanges.js` — rangos de fecha (ayer / semana / mes) en hora argentina.
 - `jugaygana*.js` + `referralRevenueService.js` + `jugayganaUserLinkService.js` —
   **muertos**, sin consumidores. Ver la nota de migración arriba.
+- `docs/ESPEC-ROLLOVER-GLOBAL-Y-MULTICUENTA-TITULAR.md` — espec portable del rollover
+  global de bonos (#278) y del cruce de multicuenta por titular del comprobante (#279).
 - `docs/ESPEC-REEMBOLSO-1GIROX.md` — cómo DEBE funcionar el reembolso/cashback sobre
   plata real (fórmula, datos de la API, casos de prueba) — portable a otros repos 1girox.
 - `docs/CLONACION-PASO-A-PASO.txt` — runbook probado para clonar TODO el proyecto a

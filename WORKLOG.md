@@ -8,6 +8,12 @@
 
 ## Sesión 2026-09-16
 
+### 280. `docs/ESPEC-ROLLOVER-GLOBAL-Y-MULTICUENTA-TITULAR.md` — espec portable de #278 y #279
+- Para replicar en otros repos 1girox: (A) rollover global (diseño del resolver en el
+  cliente de la API, exclusiones, validación contra `bonus.multipliers`, endpoints,
+  panel, pruebas) y (B) multicuenta por titular del comprobante (normalización,
+  cruce, los 3 puntos de uso, pruebas).
+
 ### 279. Multicuenta por TITULAR del comprobante (la IA leía el nombre pero no lo cruzaba)
 - **Caso owner (gxmai665):** la IA verificó el comprobante ($10.000, sin transferencia
   en el banco todavía) pero el titular de origen ya había cargado antes en OTRA cuenta
