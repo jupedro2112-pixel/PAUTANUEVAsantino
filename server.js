@@ -1594,7 +1594,35 @@ async function changePasswordByPhone(phone, newPassword) {
 // "desactivado a propósito" → devuelve null para que el caller NO envíe el mensaje.
 // Si el comando NO existe (instalación nueva, antes del seed) usa el fallback.
 // Nunca lanza: ante error de DB devuelve el fallback ya renderizado.
-async function renderSystemCommand(name, fallback, vars = {}) {
+// #281 (owner 2026-09-16): TODO mensaje automático que anuncia un bono dice qué
+// ROLLOVER tiene (el global del panel, #278). Variables para los /sys_*:
+//   {rollover}     → "x3"
+//   {rollover_txt} → "🎯 Este bono tiene ROLLOVER x3: para poder retirarlo tenés
+//                     que apostar 3 veces su valor." (x0 → "sin rollover")
+// Si el comando NO tiene ninguna de las dos, en los mensajes de bono la frase se
+// AGREGA sola al final (así los comandos ya editados por el owner también la
+// muestran). Para que un comando NO la muestre: escribir {rollover_off} en él.
+async function buildRolloverVars() {
+  let x = 0;
+  try { const g = await getGlobalBonusRollover(); x = g.enabled ? g.effective : 0; } catch (_) {}
+  const rollover = 'x' + x;
+  const rollover_txt = x > 0
+    ? `🎯 Este bono tiene ROLLOVER ${rollover}: para poder retirarlo tenés que apostar ${x} veces su valor (con slots y ruleta).`
+    : '✅ Este bono no tiene rollover: podés retirarlo cuando quieras.';
+  return { rollover, rollover_txt, x };
+}
+async function applyRolloverVars(text, opts = {}) {
+  if (text == null) return text;
+  let out = String(text);
+  const rv = await buildRolloverVars();
+  const hasVar = /\{rollover(_txt)?\}/.test(out);
+  const off = /\{rollover_off\}/.test(out);
+  out = out.replace(/\{rollover_off\}/g, '').replace(/\{rollover_txt\}/g, rv.rollover_txt).replace(/\{rollover\}/g, rv.rollover);
+  if (opts.bonus && !hasVar && !off) out = out.replace(/\s+$/, '') + '\n\n' + rv.rollover_txt;
+  return out;
+}
+
+async function renderSystemCommand(name, fallback, vars = {}, opts = {}) {
   let template = fallback;
   try {
     const cmd = await Command.findOne({ name, isActive: true }).lean();
@@ -1611,6 +1639,9 @@ async function renderSystemCommand(name, fallback, vars = {}) {
   for (const [k, v] of Object.entries(vars)) {
     out = out.replace(new RegExp('\\{' + k + '\\}', 'g'), v == null ? '' : String(v));
   }
+  // #281: variables de rollover en TODOS los /sys_*; en los de bono (opts.bonus) la
+  // frase se agrega sola si el comando no la tiene.
+  out = await applyRolloverVars(out, { bonus: !!opts.bonus });
   return out;
 }
 
@@ -2732,7 +2763,7 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
       : `🔒💰 Depósito de $${Number(amount).toLocaleString('es-AR')} acreditado con éxito. ✅\n💸 Tu nuevo saldo es ${balStr} 💸`;
     const depositTpl = resolveSysContent(depositCmd, _hgFallback);
     if (depositTpl) { // null = comando vaciado a propósito → no enviar mensaje al cliente
-      const clientMsg = depositTpl.replace(/\{amount\}/g, Number(amount)).replace(/\{bonus\}/g, _hgBonusApplied ? _hgBonus : 0).replace(/\{balance\}/g, newBalance !== null ? newBalance : 'actualizándose');
+      const clientMsg = (await applyRolloverVars(depositTpl, { bonus: !!_hgBonusApplied })).replace(/\{amount\}/g, Number(amount)).replace(/\{bonus\}/g, _hgBonusApplied ? _hgBonus : 0).replace(/\{balance\}/g, newBalance !== null ? newBalance : 'actualizándose');
       const sysMsg = await Message.create({
         id: uuidv4(), senderId: 'admin', senderUsername: 'Sistema', senderRole: 'admin',
         receiverId: user.id, receiverRole: 'user', content: clientMsg, type: 'system', timestamp: new Date(), read: false
@@ -8352,7 +8383,7 @@ app.post('/api/vip/rakeback/claim', authMiddleware, async (req, res) => {
 
       res.json({
         success: true,
-        message: `¡Rakeback semanal de $${amount.toLocaleString('es-AR')} acreditado! (${pct}% de lo que apostaste)`,
+        message: `¡Rakeback semanal de $${amount.toLocaleString('es-AR')} acreditado! (${pct}% de lo que apostaste) ${(await buildRolloverVars()).rollover_txt}`,
         amount,
         pct,
         wagered
@@ -9006,7 +9037,7 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
       // para que lo aplique manualmente.
       const includeBonusInMessage = bonusRequested && bonusActuallyApplied;
       if (depositCmd && depositCmd.response) {
-        messageContent = depositCmd.response
+        messageContent = (await applyRolloverVars(depositCmd.response, { bonus: includeBonusInMessage }))
           .replace(/\{amount\}/g, amount)
           .replace(/\{bonus\}/g, includeBonusInMessage ? _effBonusApplied : 0)
           .replace(/\{balance\}/g, newBalance !== null ? newBalance : 'actualizándose');
@@ -9606,11 +9637,11 @@ app.post('/api/admin/bonus', authMiddleware, depositorMiddleware, async (req, re
           const bonusDisabled = bonusCmd && (!bonusCmd.response || !String(bonusCmd.response).trim());
           let bonusMsg;
           if (bonusCmd && bonusCmd.response) {
-            bonusMsg = bonusCmd.response
+            bonusMsg = (await applyRolloverVars(bonusCmd.response, { bonus: true }))
               .replace(/\$\{amount\}/g, bonusAmount)
               .replace(/\$\{balance\}/g, newBalance !== null ? newBalance : '—');
           } else {
-            bonusMsg = `🎁 ¡Bonificación de $${bonusAmount} acreditada en tu cuenta! ✅\n💸 Tu saldo actual es $${newBalance !== null ? newBalance : '—'} 💸\n\nPuedes verificarlo en: https://1girox.com`;
+            bonusMsg = await applyRolloverVars(`🎁 ¡Bonificación de $${bonusAmount} acreditada en tu cuenta! ✅\n💸 Tu saldo actual es $${newBalance !== null ? newBalance : '—'} 💸\n\nPuedes verificarlo en: https://1girox.com`, { bonus: true });
           }
           if (!bonusDisabled) await Message.create({ // null = comando vaciado a propósito → no enviar
             id: uuidv4(),
@@ -10800,13 +10831,13 @@ async function initializeData() {
   const systemCmds = [
     {
       name: '/sys_deposit',
-      description: 'Mensaje automático al realizar un depósito sin bonus. Variables disponibles: ${amount}, ${balance}',
+      description: 'Mensaje automático al realizar un depósito sin bonus. Variables disponibles: ${amount}, ${balance}. Rollover: {rollover} (ej. x3) y {rollover_txt} (frase completa); si no ponés ninguna, la frase se agrega sola al final; {rollover_off} la saca',
       type: 'message',
       response: '🔒💰 Depósito de ${amount} acreditado con éxito. ✅ \n💸 Tu nuevo saldo es ${balance} 💸\n\nPuedes verificarlo en: https://1girox.com\n\n🔥 Mañana podes revisar si tenes reembolso para reclamar de forma automatica 🔥'
     },
     {
       name: '/sys_deposit_bonus',
-      description: 'Mensaje automático al realizar un depósito con bonus. Variables disponibles: ${amount}, ${bonus}, ${balance}',
+      description: 'Mensaje automático al realizar un depósito con bonus. Variables disponibles: ${amount}, ${bonus}, ${balance}. Rollover: {rollover} (ej. x3) y {rollover_txt} (frase completa); si no ponés ninguna, la frase se agrega sola al final; {rollover_off} la saca',
       type: 'message',
       response: '🔒💰 Depósito de ${amount} (incluye ${bonus} de bonificación) acreditado con éxito. ✅ \n💸 Tu nuevo saldo es ${balance} 💸\n\nPuedes verificarlo en: https://1girox.com\n\n🔥 Mañana podes revisar si tenes reembolso para reclamar de forma automatica 🔥'
     },
@@ -10887,19 +10918,19 @@ async function initializeData() {
     },
     {
       name: '/sys_vip_levelup',
-      description: 'Mensaje automático cuando el cliente alcanza un nivel VIP (por apostado acumulado) y se le acredita el bono del nivel. Variables: {username}, {level} (nombre del nivel), {emoji}, ${bonus}. Si lo dejás vacío, no se envía.',
+      description: 'Mensaje automático cuando el cliente alcanza un nivel VIP (por apostado acumulado) y se le acredita el bono del nivel. Variables: {username}, {level} (nombre del nivel), {emoji}, ${bonus}. Si lo dejás vacío, no se envía.. Rollover: {rollover} (ej. x3) y {rollover_txt} (frase completa); si no ponés ninguna, la frase se agrega sola al final; {rollover_off} la saca',
       type: 'message',
       response: '🎉 ¡FELICITACIONES {username}!\n\nAlcanzaste el nivel VIP {emoji} {level} por todo lo que jugaste.\n\n💰 Ya te acreditamos tu bono de ${bonus} en la plataforma.\n\nCuanto más jugás, más alto llegás: cada nivel te da un bono mayor y más rakeback semanal. Tocá tu perfil en la app para ver cuánto te falta para el próximo nivel. 🚀'
     },
     {
       name: '/sys_welcome_code',
-      description: 'Mensaje automático cuando el cliente canjea el código de bienvenida de la Comunidad de Telegram y el bono es EN LA PRÓXIMA CARGA (lo aplica el agente). Variables: {username}, ${amount}. Si lo dejás vacío, no se envía.',
+      description: 'Mensaje automático cuando el cliente canjea el código de bienvenida de la Comunidad de Telegram y el bono es EN LA PRÓXIMA CARGA (lo aplica el agente). Variables: {username}, ${amount}. Si lo dejás vacío, no se envía.. Rollover: {rollover} (ej. x3) y {rollover_txt} (frase completa); si no ponés ninguna, la frase se agrega sola al final; {rollover_off} la saca',
       type: 'message',
       response: '🎉 ¡Código de bienvenida canjeado, {username}!\n\n🎁 Tenés un BONO SORPRESA de ${amount} para tu PRÓXIMA CARGA.\n\nCuando vayas a cargar, avisale al agente que tenés el bono de bienvenida de la Comunidad y te lo suma en el momento. 🥳\n\n⚠️ Es por única vez.',
     },
     {
       name: '/sys_welcome_code_cash',
-      description: 'Mensaje automático cuando el cliente canjea el código de bienvenida y el bono es MONTO SORPRESA (se acredita solo). Variables: {username}, ${amount}. Si lo dejás vacío, no se envía.',
+      description: 'Mensaje automático cuando el cliente canjea el código de bienvenida y el bono es MONTO SORPRESA (se acredita solo). Variables: {username}, ${amount}. Si lo dejás vacío, no se envía.. Rollover: {rollover} (ej. x3) y {rollover_txt} (frase completa); si no ponés ninguna, la frase se agrega sola al final; {rollover_off} la saca',
       type: 'message',
       response: '🎉 ¡Código de bienvenida canjeado, {username}!\n\n💰 Tu BONO SORPRESA de ${amount} ya está ACREDITADO en tu cuenta. ¡A jugarlo! 🎰\n\n⚠️ Es por única vez.',
     },
@@ -12740,7 +12771,8 @@ app.post('/api/community-code/claim', authMiddleware, authLimiter, async (req, r
         '🎉 ¡Código de bienvenida canjeado, {username}!\n\n' +
         '💰 Tu BONO SORPRESA de ${amount} ya está ACREDITADO en tu cuenta. ¡A jugarlo! 🎰\n\n' +
         '⚠️ Es por única vez.',
-        { username: user.username, amount: montoFmt }
+        { username: user.username, amount: montoFmt },
+        { bonus: true } // #281
       );
       if (contentCash) await Message.create({
         id: uuidv4(), senderId: 'system', senderUsername: 'Sistema', senderRole: 'admin',
@@ -12774,7 +12806,8 @@ app.post('/api/community-code/claim', authMiddleware, authLimiter, async (req, r
       '🎁 Tenés un {amount}% EXTRA para tu PRÓXIMA CARGA.\n\n' +
       'Cuando vayas a cargar, avisale al agente que tenés el bono de bienvenida de la Comunidad y te lo suma en el momento. 🥳\n\n' +
       '⚠️ Es por única vez.',
-      { username: user.username, amount: montoFmt }
+      { username: user.username, amount: montoFmt },
+      { bonus: true } // #281
     );
     if (content) await Message.create({
       id: uuidv4(),
@@ -19501,7 +19534,8 @@ async function _notifyVipLevelUp(userLean, level) {
       level: level.name,
       emoji: level.emoji,
       bonus: level.levelUpBonusArs.toLocaleString('es-AR')
-    }
+    },
+    { bonus: true } // #281
   );
   if (!content) return; // comando vaciado a propósito desde el panel
 
@@ -20558,7 +20592,7 @@ async function _creditNotifBatchGift(uDoc, batch) {
 }
 
 // Texto que ve el cliente en el chat (el push lleva title + message pelado).
-function _notifBatchChatContent(batch) {
+async function _notifBatchChatContent(batch) {
   if (batch.giftType === 'none') return String(batch.message || ''); // #264 solo aviso
   if (batch.mode === 'code') {
     // Fichas por código = acreditación AUTOMÁTICA al canjear; % = lo aplica
@@ -20572,7 +20606,7 @@ function _notifBatchChatContent(batch) {
   const como = (batch.giftType === 'percent' && batch.applyMode === 'auto')
     ? 'Se te suma SOLO cuando cargás, no tenés que avisar nada.'
     : 'Avisale al agente cuando cargues.';
-  return `${batch.message}\n\n🎁 Tenés un ${_giftLabelOf(batch)}, ya activado. ${como}${_batchRolloverTxt(batch)} ⏰ Válido por ${batch.validHours}hs.`;
+  return `${batch.message}\n\n🎁 Tenés un ${_giftLabelOf(batch)}, ya activado. ${como}${await _batchRolloverTxt(batch)} ⏰ Válido por ${batch.validHours}hs.`;
 }
 
 // ============================================================
@@ -20614,7 +20648,7 @@ async function _processNotifBatchQueue() {
 async function _processOneNotifBatch(batchId) {
   const batch = await NotifBatch.findOne({ id: batchId }).select('-recipients').lean();
   if (!batch) return;
-  const chatContent = _notifBatchChatContent(batch);
+  const chatContent = await _notifBatchChatContent(batch);
   const pushTitle = batch.title || (batch.giftType === 'none' ? '📢 Aviso' : '🎁 Tenés un regalo');
   const pushBody = String(batch.message || '').slice(0, 150);
   let procesados = 0;
@@ -20781,9 +20815,10 @@ function _batchWindowTxt(batch) {
 }
 
 // Frase de rollover del % automático para el cliente ('' si no tiene).
-function _batchRolloverTxt(batch) {
+// #281: usa el rollover EFECTIVO (global del panel si está ON, si no el del lote).
+async function _batchRolloverTxt(batch) {
   if (batch.giftType !== 'percent' || batch.applyMode !== 'auto') return '';
-  const r = Number(batch.rolloverX) || 0;
+  const r = await applyGlobalRollover(Number(batch.rolloverX) || 0);
   return r > 0 ? ` El extra entra como bono con rollover x${r} (apostá ${r}× el bono y después podés retirar).` : '';
 }
 function _giftLabelOf(batch) {
@@ -20949,7 +20984,7 @@ async function _tryClaimNotifBatchCode(reqUser, attempt) {
   await Message.create({
     id: uuidv4(), senderId: 'system', senderUsername: 'Sistema', senderRole: 'admin',
     receiverId: uDoc.id, receiverRole: 'user',
-    content: `🎉 ¡Código canjeado, ${uDoc.username}!\n\n🎁 Tenés un ${giftTxt}.\n\n${comoTxt}${_batchRolloverTxt(batch)} ⏰ Válido hasta ${hastaFmt}.`,
+    content: `🎉 ¡Código canjeado, ${uDoc.username}!\n\n🎁 Tenés un ${giftTxt}.\n\n${comoTxt}${await _batchRolloverTxt(batch)} ⏰ Válido hasta ${hastaFmt}.`,
     type: 'system', timestamp: new Date(), read: false
   }).catch(() => {});
   await _emitAdminOnlyChatNote(

@@ -903,10 +903,13 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
 
 ## 8. Convenciones importantes
 
-- **Mensajes automáticos al usuario** → `renderSystemCommand(name, fallback, vars)` y
+- **Mensajes automáticos al usuario** → `renderSystemCommand(name, fallback, vars, opts)` y
   sembrar el comando en `systemCmds` de `initializeData()`. Respuesta VACÍA en el panel
   = "no enviar" (null). Variables: montos como `${amount}` en el template y se
   reemplaza `{amount}` (el `$` queda como signo); texto como `{username}` sin `$`.
+  Variables globales (#281): `{rollover}` / `{rollover_txt}` (rollover efectivo del
+  panel); con `opts.bonus:true` la frase se agrega sola si el comando no la tiene
+  (`{rollover_off}` la evita). `applyRolloverVars()` para los mensajes armados a mano.
 - **Identidad**: `user.id` (uuid), no `_id`. Username case-insensitive →
   `findUserByUsernameCI` (indexado + fallback), NUNCA regex nuevo.
 - **periodKey**: `YYYY-MM` (referidos y VipWagerMonth); RefundClaim usa

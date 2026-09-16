@@ -8,6 +8,28 @@
 
 ## Sesión 2026-09-16
 
+### 281. Los mensajes automáticos de bono dicen qué ROLLOVER tiene (el global del panel)
+- **Pedido owner:** que todo mensaje automático que anuncia un bono (1ª carga, bonus,
+  reembolso, etc.) incluya "el bono incluye ROLLOVER x" con el valor configurado.
+- **Implementado (server.js):** `buildRolloverVars()` → `{rollover}` ("x3") y
+  `{rollover_txt}` ("🎯 Este bono tiene ROLLOVER x3: para poder retirarlo tenés que
+  apostar 3 veces su valor (con slots y ruleta)." / con x0: "✅ Este bono no tiene
+  rollover…"), leídos del rollover global efectivo (#278). `applyRolloverVars(text,
+  {bonus})` reemplaza las variables en cualquier `/sys_*` y, en los mensajes de BONO,
+  si el comando no tiene ninguna variable **agrega la frase sola al final** (así los
+  comandos ya editados por el owner también la muestran sin migración);
+  `{rollover_off}` en el comando la saca. `renderSystemCommand` acepta `opts.bonus`.
+- **Cubiertos:** `/sys_deposit_bonus` (carga manual con bonus y auto-carga hgcash con
+  bono de 1ª carga/ruleta/lote — solo cuando el bono se aplicó de verdad), `/sys_bonus`
+  (bono manual, incl. fallback sin comando), `/sys_welcome_code_cash`,
+  `/sys_welcome_code`, `/sys_vip_levelup`, frase de rollover de los lotes
+  (`_batchRolloverTxt` ahora usa el efectivo; pasó a async junto con
+  `_notifBatchChatContent`), respuesta del rakeback. Ruleta/cashback/fueguito ya
+  muestran su rollover en la PWA (hub) con el valor efectivo desde #278.
+- Descripciones de los 5 comandos sembrados avisan las variables nuevas (se ven en
+  COMANDOS). Sin migración de datos.
+- **Validado:** `node --check` OK. Back necesita redeploy (junto con #278/#279).
+
 ### 280. `docs/ESPEC-ROLLOVER-GLOBAL-Y-MULTICUENTA-TITULAR.md` — espec portable de #278 y #279
 - Para replicar en otros repos 1girox: (A) rollover global (diseño del resolver en el
   cliente de la API, exclusiones, validación contra `bonus.multipliers`, endpoints,
