@@ -8,6 +8,34 @@
 
 ## Sesión 2026-09-16
 
+### 279. Multicuenta por TITULAR del comprobante (la IA leía el nombre pero no lo cruzaba)
+- **Caso owner (gxmai665):** la IA verificó el comprobante ($10.000, sin transferencia
+  en el banco todavía) pero el titular de origen ya había cargado antes en OTRA cuenta
+  y no hubo aviso. Causa: el cruce de identidad bancaria (#259) corre SOLO cuando llega
+  el movimiento por webhook (`fromCBU`/`fromName`); si la transferencia no aparece
+  (banco sin API, demora), nunca se ejecutaba. El titular que lee la IA
+  (`Comprobante.originHolder`) no se cruzaba con nada.
+- **Fix:** `Comprobante.originHolderKey` (titular normalizado: mayúsculas, sin acentos ni
+  puntuación; mínimo 2 palabras y 8 letras; indexado) + `_findHolderConflict(userId,
+  nombre)` que busca ese titular en comprobantes verificados de OTRAS cuentas
+  (`originHolderKey` o `originHolder` exacto case-insensitive para filas viejas) y en
+  `BankMovement.fromName` de otras cuentas. Se usa en 3 lugares:
+  1. **Al verificar el comprobante** → nota adminOnly "🚨 MULTICUENTA POR TITULAR: el
+     comprobante viene de X, que YA cargó en @otro (comprobante anterior / banco).
+     Si se carga a mano, SIN bonos automáticos."
+  2. **Auto-carga hgcash (#259):** si el movimiento no matchea con `BankMovement`, se
+     prueba el titular contra comprobantes de otras cuentas → misma consecuencia
+     (carga sin bonos + alerta).
+  3. **fraud-check del panel:** señal nueva `receipt_holder` (fuerte): "el MISMO
+     titular en los comprobantes (Nombre) — leído por la IA". Iconos 🏦/🧾 en el
+     banner. **admin-sw → v54.**
+- **Caso 2 del owner (ArgenAle944x, "la IA no leyó nada"):** ese panel NO es de este
+  proyecto (8.584 usuarios, pestaña Comunidad, usuarios `Argen…` = AUTOREEMBOLSOS /
+  JUGAYGANA). Allá la IA no corrió — con el proxy webshare sin cuota (#277-bis) la
+  llamada a Anthropic también puede estar pasando por el proxy; revisar en ese repo.
+- **Validado:** `node --check` OK (server.js, Comprobante.js, admin.js, admin-sw). Back
+  necesita redeploy. Sin migración: las filas viejas se cruzan por regex del nombre.
+
 ### 278. ROLLOVER GLOBAL de bonos (x3 por default) editable desde el panel: x0 / x2 / x3 / x5 / x10
 - **Pedido owner:** que TODOS los bonos (100% automático de 1ª carga, ruletas, etc.)
   salgan con rollover x3 y que se pueda cambiar desde el panel entre x0/x2/x3/x5/x10.

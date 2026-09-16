@@ -28,6 +28,9 @@ const comprobanteSchema = new mongoose.Schema({
   operationNumber: { type: String, default: null, trim: true },
   amount: { type: Number, default: null },
   originHolder: { type: String, default: null, trim: true }, // titular / origen
+  // #279: titular de origen NORMALIZADO (mayúsculas, sin acentos/puntuación) para
+  // cruzar "la misma persona cargó en otra cuenta" por comprobante, sin regex.
+  originHolderKey: { type: String, default: null, index: true },
   originCbu: { type: String, default: null, trim: true },    // CBU/CVU/alias origen
   destHolder: { type: String, default: null, trim: true },   // titular / destino (quién recibe)
   destCbu: { type: String, default: null, trim: true },      // CBU/CVU/alias destino (a quién se envió)

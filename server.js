@@ -1762,6 +1762,38 @@ function getArgentinaYesterday() {
 // COMPROBANTES — detección de reutilización con IA (anti-estafa)
 // ============================================
 // Normaliza una huella de comprobante para comparar duplicados (sólo alfanumérico).
+// #279 — MULTICUENTA POR TITULAR DEL COMPROBANTE (owner 2026-09-16: "un titular
+// que ya había cargado con otro usuario y la IA no lo detectó"). El #259 cruza
+// identidades bancarias solo cuando LLEGA el movimiento por webhook; si la
+// transferencia no aparece (banco sin API / demora), nunca corría. Acá se cruza
+// el titular que leyó la IA del comprobante contra los comprobantes y movimientos
+// de OTRAS cuentas, en el momento de verificarlo.
+function _holderKey(name) {
+  const k = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Mínimo 2 palabras y 8 letras: "JUAN" o "SA" no identifican a nadie.
+  if (k.length < 8 || k.split(' ').length < 2) return null;
+  return k;
+}
+async function _findHolderConflict(userId, holderName) {
+  const key = _holderKey(holderName);
+  if (!key) return null;
+  try {
+    const c = await Comprobante.findOne({
+      isComprobante: true, userId: { $ne: String(userId) },
+      $or: [{ originHolderKey: key }, { originHolder: new RegExp('^' + String(holderName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }],
+      status: { $in: ['unique', 'no_key'] }
+    }).sort({ createdAt: -1 }).select('username userId createdAt').lean();
+    if (c) return { username: c.username, userId: c.userId, via: 'comprobante', at: c.createdAt };
+    const m = await BankMovement.findOne({
+      fromName: new RegExp('^' + String(holderName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'),
+      matchedUserId: { $exists: true, $nin: [null, String(userId)] }
+    }).select('matchedUsername matchedUserId createdAt').lean();
+    if (m) return { username: m.matchedUsername, userId: m.matchedUserId, via: 'banco', at: m.createdAt };
+  } catch (e) { logger.warn(`[comprobante] cruce de titular falló: ${e.message}`); }
+  return null;
+}
+
 function _normComprobanteKey(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -1911,6 +1943,7 @@ async function analyzeComprobanteFromMessage({ userId, username, content, messag
       isComprobante: true, aiConfidence: result.confidence || 0,
       operationNumber: result.operationNumber || null,
       amount: result.amount, originHolder: result.originHolder || null,
+      originHolderKey: _holderKey(result.originHolder), // #279
       originCbu: result.originCbu || null,
       destHolder: result.destHolder || null, destCbu: result.destCbu || null,
       bank: result.bank || null,
@@ -1973,6 +2006,15 @@ async function analyzeComprobanteFromMessage({ userId, username, content, messag
       await _emitAdminOnlyChatNote(userId, username,
         `🧾 Comprobante recibido (${dataDesc}). ⚠️ No se pudieron extraer datos para chequear duplicado — verificá a mano.`);
     }
+    // #279: ¿el TITULAR que envió la plata ya cargó en OTRA cuenta nuestra?
+    try {
+      const conflict = await _findHolderConflict(userId, result.originHolder);
+      if (conflict) {
+        await _emitAdminOnlyChatNote(userId, username,
+          `🚨 MULTICUENTA POR TITULAR: el comprobante viene de "${result.originHolder}", que YA cargó en la cuenta @${conflict.username || '?'} (${conflict.via === 'banco' ? 'transferencia confirmada por el banco' : 'comprobante anterior'}). Si se carga a mano, SIN bonos automáticos. Verificá y bloqueá si corresponde.`);
+        logger.warn(`[comprobante] MULTICUENTA titular: ${username} comprobante de "${result.originHolder}" ya usado por ${conflict.username} (${conflict.via})`);
+      }
+    } catch (_) {}
     // Banco automático: si fue al CBU con API, intentar matchear + cargar.
     hgcashMatchFromComprobante({ ...base, status }).catch(() => {});
   } catch (e) {
@@ -2580,6 +2622,12 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
           matchedUserId: { $exists: true, $nin: [null, user.id] },
           matchStatus: { $in: ['auto_charged', 'manual_charged', 'shadow_matched', 'needs_review', 'duplicate'] }
         }).select('matchedUsername fromName fromCBU').lean();
+      }
+      // #279: además de los movimientos, los COMPROBANTES de otras cuentas con el
+      // mismo titular (cubre al que cargó antes en otro usuario por banco sin API).
+      if (!_dupBank && movement.fromName) {
+        const hc = await _findHolderConflict(user.id, movement.fromName);
+        if (hc) _dupBank = { fromName: movement.fromName, fromCBU: movement.fromCBU, matchedUsername: hc.username };
       }
     } catch (eDup) { logger.warn(`[hgcash] chequeo multicuenta bancaria falló (sigue con bonos): ${eDup.message}`); }
     if (_dupBank) {
@@ -15981,6 +16029,28 @@ app.get('/api/admin/users/:userId/fraud-check', authMiddleware, adminMiddleware,
         }
       }
     } catch (eBk) { logger.warn(`[fraud-check] señal bancaria falló: ${eBk.message}`); }
+
+    // #279 TITULAR de los comprobantes compartido: la IA leyó el mismo nombre de
+    // origen en comprobantes de OTRA cuenta (sirve aunque el banco no tenga API).
+    try {
+      const myComps = await Comprobante.find({ userId: user.id, isComprobante: true, originHolderKey: { $ne: null } })
+        .select('originHolderKey originHolder').limit(50).lean();
+      const myKeys = Array.from(new Set(myComps.map(c => c.originHolderKey).filter(Boolean)));
+      if (myKeys.length) {
+        const otherComps = await Comprobante.find({
+          originHolderKey: { $in: myKeys }, userId: { $ne: user.id }, isComprobante: true
+        }).select('userId username').limit(100).lean();
+        if (otherComps.length) {
+          const byUser = new Map();
+          for (const c of otherComps) byUser.set(c.userId, { id: c.userId, username: c.username || '?', isBlocked: false });
+          reasons.push({
+            type: 'receipt_holder', strong: true, count: byUser.size,
+            label: 'el MISMO titular en los comprobantes (' + ((myComps[0] && myComps[0].originHolder) || myKeys[0]) + ') — leído por la IA',
+            accounts: Array.from(byUser.values()).slice(0, SAMPLE)
+          });
+        }
+      }
+    } catch (eRh) { logger.warn(`[fraud-check] señal titular comprobante falló: ${eRh.message}`); }
 
     // IP de registro compartida — señal débil (mismo wifi/datos del celu).
     if (user.registrationIp) {

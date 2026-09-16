@@ -118,7 +118,9 @@ modelos); sus migraciones corren únicamente si algo llamara a ese connectDB.
   error|ignored. Dedupe por `movementId` único.
 - **Comprobante** — cada imagen que la IA (Claude vision) clasificó como comprobante.
   `dedupeKey` (N° operación normalizado, descartando CBU/CUIT) + `imageHash` (SHA-256)
-  para detectar reutilización. `bankMatchStatus` para la auto-carga.
+  para detectar reutilización. `bankMatchStatus` para la auto-carga. `originHolderKey`
+  (#279): titular de origen normalizado para cruzar multicuenta por comprobante
+  (`_findHolderConflict`: al verificar, en la auto-carga y en el fraud-check).
 - **HgcashCharge** — candado de idempotencia de la carga automática: índice único por
   `chargeKey` (coelsaCode) — la MISMA transferencia se acredita UNA sola vez entre
   instancias. Si la carga falla en 1girox, el registro se BORRA para permitir retry

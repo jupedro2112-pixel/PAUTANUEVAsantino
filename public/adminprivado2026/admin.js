@@ -4897,7 +4897,7 @@ async function renderFraudBanner(userId) {
         if (userId !== activeConversationId) return;
         if (!data || !data.suspicious || !Array.isArray(data.reasons) || !data.reasons.length) return;
 
-        const iconFor = (t) => t === 'device' ? '📱' : (t === 'phone' ? '☎️' : '🌐');
+        const iconFor = (t) => t === 'device' ? '📱' : (t === 'phone' ? '☎️' : (t === 'bank' ? '🏦' : (t === 'receipt_holder' ? '🧾' : '🌐')));
         const rows = data.reasons.map(r => {
             const accs = Array.isArray(r.accounts) ? r.accounts : [];
             const names = accs.map(a => escapeHtml(a.username) + (a.isBlocked ? ' 🚫' : '')).join(', ');
