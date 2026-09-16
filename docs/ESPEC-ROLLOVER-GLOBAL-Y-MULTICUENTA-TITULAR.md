@@ -107,6 +107,30 @@ con leer `r.rolloverApplied` que devuelve el cliente de la API.
   gris con ⚠️ y tooltip) + hint "Activo: todos los bonos salen con xN" / aviso de
   `snapped` / lista permitida. Bumpear el service worker del panel.
 
+## A.5b Mensajes automáticos: decir el rollover
+Todo mensaje automático que anuncia un bono (carga con bonus, bono manual, código de
+bienvenida, nivel VIP, lote, rakeback, reembolso…) tiene que decir el rollover
+EFECTIVO. Implementación:
+```js
+async function buildRolloverVars() {   // lee el global efectivo (A.3); x=0 si está apagado
+  const rollover = 'x' + x;
+  const rollover_txt = x > 0
+    ? `🎯 Este bono tiene ROLLOVER ${rollover}: para poder retirarlo tenés que apostar ${x} veces su valor (con slots y ruleta).`
+    : '✅ Este bono no tiene rollover: podés retirarlo cuando quieras.';
+  return { rollover, rollover_txt, x };
+}
+async function applyRolloverVars(text, { bonus } = {}) {
+  // reemplaza {rollover} y {rollover_txt}; si bonus=true y el texto no tiene ninguna
+  // variable (ni {rollover_off}), AGREGA "\n\n" + rollover_txt al final
+}
+```
+- El renderizador de comandos `/sys_*` aplica `applyRolloverVars` a todos y recibe
+  `opts.bonus` en los comandos de bono → los comandos ya editados por el owner muestran
+  la frase sin migración; `{rollover_off}` la saca; `{rollover_txt}` la ubica donde quiera.
+- Los mensajes armados a mano (fallbacks, respuestas de API como el rakeback, lotes)
+  pasan por `applyRolloverVars(texto, { bonus: true })` o interpolan `rollover_txt`.
+- Solo cuando el bono se aplicó de verdad (una carga sin bono no la muestra).
+
 ## A.6 Pruebas
 | Caso | Esperado |
 |---|---|
@@ -117,6 +141,9 @@ con leer `r.rolloverApplied` que devuelve el cliente de la API.
 | Global OFF | cada flujo con su rollover de siempre |
 | Global ON → comisión de referidos | sin rollover (excluida) |
 | Global ON → devolución de retiro rechazado | sin rollover (excluida) |
+| Carga manual con bonus 20%, comando /sys_deposit_bonus editado sin variables | el mensaje termina con "🎯 Este bono tiene ROLLOVER x3…" |
+| Comando con `{rollover_off}` | no muestra la frase |
+| Global OFF | la frase dice el rollover propio del flujo (x0 → "no tiene rollover") |
 
 ---
 
