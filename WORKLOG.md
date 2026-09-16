@@ -6,6 +6,40 @@
 >
 > **Última actualización: 2026-09-08**
 
+## Sesión 2026-09-16
+
+### 278. ROLLOVER GLOBAL de bonos (x3 por default) editable desde el panel: x0 / x2 / x3 / x5 / x10
+- **Pedido owner:** que TODOS los bonos (100% automático de 1ª carga, ruletas, etc.)
+  salgan con rollover x3 y que se pueda cambiar desde el panel entre x0/x2/x3/x5/x10.
+- **Diseño:** un solo override en el cliente de la Partner API (`giroxService.
+  setRolloverResolver`, inyectado desde server.js como el keyResolver): cuando el modo
+  global está encendido, `creditGift`, `creditUserBalance` con `multiplier` y el
+  `bonus_multiplier` de `depositToUser` (solo si la carga lleva bono nuestro) usan el
+  valor global, salvo `ignoreGlobalRollover:true`. Así cubre de una a los 12 flujos:
+  1ª carga 100%, bonus manual del agente, ruleta de bienvenida y diaria (cash y %),
+  lotes (fichas y %), código de bienvenida, fueguito, cashback, reembolso
+  semanal/mensual, rakeback, bono de nivel VIP. **Excluidos** (no son bonos):
+  comisiones de referidos (`referralPayoutService`) y devoluciones de retiro rechazado.
+  Además `applyGlobalRollover()` se aplica en server.js en los puntos donde el valor
+  se muestra/registra (mensajes al cliente, Transaction, `_wrMult`, `_dRoll`, cashback
+  status, lote, fueguito, código) para que lo que se dice coincida con lo acreditado.
+- **Config:** `Config['bonusRolloverGlobal'] = { enabled, x }`, default `{true, 3}`.
+  `getGlobalBonusRollover()` valida contra `bonus.multipliers` de 1girox: si el elegido
+  NO está permitido, usa el permitido más cercano hacia ARRIBA (`effective`, flag
+  `snapped`). ⚠️ En la config real del owner (2026-08-05) la lista era
+  `[0,2,5,10,20,40]` → **x3 puede no estar permitido → se usaría x5** hasta que
+  soporte de 1girox habilite x3. El panel lo avisa.
+- **Endpoints:** `GET/POST /api/admin/bonus-rollover` (solo admin general). **Panel:**
+  card "🎯 Rollover GLOBAL de bonos" en Configuración (arriba del cashback): switch
+  + botones x0/x2/x3/x5/x10 (los no permitidos por la plataforma en gris con ⚠️) +
+  hint con el efectivo y la lista permitida. **admin-sw → v53.** Los rollovers
+  individuales de cada card siguen editables pero se ignoran mientras el global esté ON
+  (apagarlo vuelve al comportamiento anterior, sin migración).
+- **Validado:** `node --check` OK (server.js, giroxService.js, referralPayoutService.js,
+  admin.js, admin-sw.js). Back necesita redeploy. PROBAR: panel → Configuración → card →
+  ver qué multiplicadores aparecen permitidos; carga manual con bonus → en 1girox el bono
+  con rollover xN; ruleta diaria cash → bono xN; comisión de referidos → sin rollover.
+
 ## Sesión 2026-09-14
 
 ### 277. "Anda lento, la carga automática tarda y a los agentes se les cierra la sesión" — análisis de logs EB (13-14/09) + 4 fixes

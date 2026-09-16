@@ -379,7 +379,7 @@ async function executePayoutsForPeriod(periodKey, options = {}) {
         referrer.username,
         totalAmount,
         payoutReference,
-        { description }
+        { description, ignoreGlobalRollover: true } // comisión, no bono (#278)
       );
 
       if (!creditResult.success) {

@@ -699,6 +699,30 @@ document.addEventListener('change', function (ev) {
                             <div id="wrOddsHint" style="color:#8fb; font-size:11px; margin-top:6px;"></div>
                         </div>
 
+                        <!-- ROLLOVER GLOBAL de bonos (#278, solo admin general) -->
+                        <div class="panel-subheader" style="margin-top: 24px;" id="bonusRolloverHeader">
+                            <h3>🎯 Rollover GLOBAL de bonos</h3>
+                        </div>
+                        <div class="cbu-form" id="bonusRolloverForm">
+                            <p style="color:#aaa;font-size:12px;line-height:1.5;margin:0 0 10px;">
+                                Un solo rollover para <b>TODOS</b> los bonos: 100% de primera carga, bonus del agente, ruleta de
+                                bienvenida y diaria, lotes, código de bienvenida, fueguito, cashback, reembolsos, rakeback y nivel VIP.
+                                Mientras esté <b>activado</b>, los rollovers individuales de cada card <b>se ignoran</b>.
+                                <b>x0</b> = sin rollover (retirable al instante). NO aplica a comisiones de referidos ni a devoluciones de retiro.
+                            </p>
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                    <input type="checkbox" id="brEnabled" style="width:auto;"> Rollover global ACTIVADO (pisa los individuales)
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>Multiplicador</label>
+                                <div id="brOptions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+                                <small id="brHint" style="color:#aaa;font-size:11px;display:block;margin-top:6px;"></small>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="saveBonusRollover()">💾 Guardar rollover global</button>
+                        </div>
+
                         <!-- Cashback INSTANTÁNEO tipo Stake (#254, solo admin general) -->
                         <div class="panel-subheader" style="margin-top: 24px;" id="cashbackHeader">
                             <h3>📉 Cashback instantáneo (tipo Stake)</h3>

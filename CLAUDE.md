@@ -107,7 +107,12 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   tiene bono en curso/sin reclamar, o si el feat no está. Al cumplir el rollover el bono
   queda "a reclamar" → se auto-reclama al entrar al casino (`_autoClaimOnEntry`,
   throttle 15 min) y tras cada depósito con bonus. NO volver a usar `depositToUser`
-  para regalos.
+  para regalos. **Rollover GLOBAL (#278):** `Config['bonusRolloverGlobal']` (default ON
+  x3, panel → Configuración) pisa el rollover de TODOS los bonos vía
+  `girox.setRolloverResolver` (creditGift / creditUserBalance+multiplier /
+  bonus_multiplier del depósito). Un flujo que NO sea bono (comisión, devolución) tiene
+  que pasar `ignoreGlobalRollover:true`. Si 1girox no permite el x elegido se usa el
+  permitido siguiente hacia arriba.
 - **Roles:** `user`, `admin` (todo), `depositor` (solo cargas), `withdrawer` (solo
   retiros), `publisher_admin` (solo crea usuarios de su publicista — lockdown via
   `PUBLISHER_ADMIN_ALLOWED_PATHS`).

@@ -253,6 +253,23 @@ async function _acquireSlot(laneKey) {
 // sites. null / error del resolver → key master (comportamiento de siempre).
 let _keyResolver = null;
 function setKeyResolver(fn) { _keyResolver = typeof fn === 'function' ? fn : null; }
+
+// ROLLOVER GLOBAL (#278, owner 2026-09-16: "TODOS los bonos con rollover x3,
+// editable desde el panel"). server.js inyecta un resolver que devuelve el
+// multiplicador global efectivo (número) o null si el modo global está apagado.
+// Se aplica en creditGift, en creditUserBalance con multiplier y en el
+// bonus_multiplier de los depósitos con bono — salvo que el caller pase
+// `ignoreGlobalRollover:true` (comisiones de referidos, devoluciones de retiro).
+let _rolloverResolver = null;
+function setRolloverResolver(fn) { _rolloverResolver = typeof fn === 'function' ? fn : null; }
+async function _globalRollover() {
+  if (!_rolloverResolver) return null;
+  try {
+    const v = await _rolloverResolver();
+    const n = Number(v);
+    return (v == null || !Number.isFinite(n) || n < 0) ? null : Math.round(n);
+  } catch (_) { return null; }
+}
 async function _resolveKeyFor(username) {
   if (!_keyResolver || !username) return null;
   try {
@@ -866,6 +883,12 @@ async function depositToUser(username, amount, description = '', reference = nul
     if (wagering.bonusPercent != null) body.bonus_percent = Number(wagering.bonusPercent);
     if (wagering.bonusAmount != null) body.bonus_amount = Number(wagering.bonusAmount);
     if (wagering.bonusMultiplier != null) body.bonus_multiplier = Number(wagering.bonusMultiplier);
+    // #278: rollover GLOBAL sobre el bono de la carga (1ª carga, ruleta %, lote %,
+    // bonus del agente). Solo si el depósito lleva bono nuestro.
+    if ((body.bonus_amount > 0 || body.bonus_percent > 0) && !wagering.ignoreGlobalRollover) {
+      const g = await _globalRollover();
+      if (g != null) body.bonus_multiplier = g;
+    }
   }
   // OPT-OUT de las reglas automáticas de bono de 1girox (Partner API v1.12+,
   // decisión owner 2026-09-04 #265): un depósito SIN bonus_percent/bonus_amount
@@ -982,7 +1005,8 @@ const GIFT_BONUS_GUARD_MIN_ARS = 50;
 async function creditGift(username, amount, opts = {}) {
   const amt = _normalizeAmount(amount);
   if (amt === null) return { success: false, error: 'Monto inválido', code: 'invalid_amount' };
-  const roll = Math.max(0, Math.round(Number(opts.rolloverX) || 0));
+  let roll = Math.max(0, Math.round(Number(opts.rolloverX) || 0));
+  if (!opts.ignoreGlobalRollover) { const g = await _globalRollover(); if (g != null) roll = g; } // #278
   const description = opts.description || '';
   const reference = opts.reference || null;
 
@@ -1013,8 +1037,9 @@ async function creditGift(username, amount, opts = {}) {
   }
 
   if (viaBonus) {
-    const r = await creditUserBalance(username, amt, reference, { multiplier: roll, description });
-    if (r.success) { r.via = 'bonus'; return r; }
+    // ignoreGlobalRollover: acá el global YA se aplicó (roll) — no volver a resolverlo.
+    const r = await creditUserBalance(username, amt, reference, { multiplier: roll, description, ignoreGlobalRollover: true });
+    if (r.success) { r.via = 'bonus'; r.rolloverApplied = roll; return r; }
     const definitivo = ['feature_disabled', 'bonus_out_of_range', 'validation_error', 'invalid_multiplier'].includes(r.code) || r.httpStatus === 422;
     if (!definitivo) return r;
     why = `/bonus rechazó (${r.code || r.error})`;
@@ -1023,6 +1048,7 @@ async function creditGift(username, amount, opts = {}) {
   const r = await depositToUser(username, amt, description, reference, roll > 0 ? { multiplier: roll } : null);
   if (r.success) {
     r.via = 'deposit';
+    r.rolloverApplied = roll;
     r.fallbackReason = why;
     logger.warn(`[girox] regalo a ${username} $${amt} (x${roll}) fue como DEPÓSITO y no como bono: ${why || 's/motivo'}`);
   }
@@ -1065,9 +1091,11 @@ async function creditUserBalance(username, amount, reference = null, opts = {}) 
 
   // Bono con rollover propio (feat opcional)
   if (opts && opts.multiplier != null) {
+    let mult = Number(opts.multiplier);
+    if (!opts.ignoreGlobalRollover) { const g = await _globalRollover(); if (g != null) mult = g; } // #278
     const body = {
       amount: amt,
-      multiplier: Number(opts.multiplier),
+      multiplier: mult,
       reference: _buildReference('bonus', reference)
     };
     // El endpoint /bonus no documenta `description`, pero se manda igual para que el
@@ -1083,11 +1111,14 @@ async function creditUserBalance(username, amount, reference = null, opts = {}) 
     });
     if (!r.ok) return { success: false, error: r.error, code: r.code, httpStatus: r.httpStatus };
     _invalidatePlayer(username); // el saldo/bono cambió → próxima lectura fresca
-    return _moneyResult(r.data);
+    const out = _moneyResult(r.data);
+    out.rolloverApplied = mult;
+    return out;
   }
 
   // Bono libre (#266): BONO directo (multiplier 0) con fallback a depósito libre.
-  return creditGift(username, amt, { reference: _buildReference('bonus', reference), description: opts.description || '', rolloverX: 0 });
+  // (#278: creditGift le aplica el rollover global, salvo ignoreGlobalRollover.)
+  return creditGift(username, amt, { reference: _buildReference('bonus', reference), description: opts.description || '', rolloverX: 0, ignoreGlobalRollover: !!(opts && opts.ignoreGlobalRollover) });
 }
 
 // ============================================================
@@ -1475,6 +1506,7 @@ module.exports = {
   formatStatsDate,
   // configuración del sitio
   getPlatformConfig,
+  setRolloverResolver,
   // bonos pendientes de reclamar
   claimPendingBonus,
   // no soportado

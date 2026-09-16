@@ -431,6 +431,16 @@ reintento manda la misma reference y la plataforma responde `duplicate:true`.
   Sólo se usa `/bonus` si explícitamente se pasa `opts.multiplier`. ⚠️ Y ahí ojo con
   "bono sobre bono": otorgar un bono a quien ya tiene uno activo PISA el anterior y le
   debita lo que le quedaba.
+- **Rollover GLOBAL de bonos (#278, 2026-09-16):** `Config['bonusRolloverGlobal']`
+  `{enabled, x}` (default ON, x3; opciones 0/2/3/5/10; `GET/POST
+  /api/admin/bonus-rollover`, card en Configuración). `giroxService.setRolloverResolver`
+  recibe el efectivo desde server.js y lo aplica en `creditGift`, `creditUserBalance`
+  con `multiplier` y el `bonus_multiplier` de `depositToUser` cuando la carga lleva bono
+  → TODOS los bonos salen con el mismo rollover; `ignoreGlobalRollover:true` lo evita
+  (comisiones de referidos, devoluciones de retiro). Se valida contra
+  `bonus.multipliers` de la plataforma: no permitido ⇒ el siguiente permitido hacia
+  arriba (`effective`/`snapped`). `applyGlobalRollover(x)` en server.js para los puntos
+  donde el valor se muestra o registra.
 - `depositToUser` acepta `wagering` opcional (`multiplier`, `bonus_percent`,
   `bonus_amount`, `bonus_multiplier`). Caso raro documentado: la carga se acredita pero
   el bono falla (`wagering.bonus.status === 'failed'`) → se marca `bonusFailed` y se
