@@ -22248,7 +22248,9 @@ if (process.env.VERCEL) {
         if (_capiOn(pid) && _capiOn(tok)) {
           const tc = process.env['META_TEST_EVENT_CODE_' + i];
           const sc = process.env['META_PIXEL_PUBLISHER_' + i];
-          _partnerBits.push(`partner${i}=OK ${String(pid).slice(0, 6)}…${_capiOn(tc) ? ` (test ${tc})` : ''}${_capiOn(sc) ? ` [solo: ${sc}]` : ' [sin asignar → recibe todo]'}`);
+          const _co = /^(1|true|on|si|sí|yes)$/i.test(String(process.env['META_PIXEL_CAPIONLY_' + i] || '').trim());
+          const _ap = /^(1|true|on|si|sí|yes)$/i.test(String(process.env['META_PIXEL_ALLPURCHASES_' + i] || '').trim());
+          _partnerBits.push(`partner${i}=OK ${String(pid).slice(0, 6)}…${_capiOn(tc) ? ` (test ${tc})` : ''}${_capiOn(sc) ? ` [solo: ${sc}]` : ' [sin asignar → recibe todo]'}${_co ? ' [solo CAPI]' : ''}${_ap ? ' [todas las compras]' : ''}`);
         } else if (pid || tok) {
           _partnerBits.push(`partner${i}=placeholder`);
         }

@@ -618,7 +618,10 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   ese alcance asignado (ni el propio ni los sin asignar). Sin código → `[]` y la landing
   **no carga fbevents.js** (ningún pixel). La landing manda `c` = `resolveCampaign()`
   (`?p=`/`?campaign=`/segmento de path); sin fallback. El pixel propio recibe alta/FTD/
-  todo por CAPI únicamente. Cambiar el alcance = editar SSM + reiniciar.
+  todo por CAPI únicamente. Cambiar el alcance = editar SSM + reiniciar. Flags por
+  slot (#284): `META_PIXEL_CAPIONLY_N=1` (solo CAPI: no se carga en la landing) y
+  `META_PIXEL_ALLPURCHASES_N=1` (todas las compras, no solo FTD). Diagnóstico por
+  usuario: `GET /api/admin/meta-diag?username=` (#283).
 - **Ruleta de bienvenida (#214, rehecha #251 2026-08-28).** Una vez por cuenta; premio
   ponderado server-side. **Cash** → `depositToUser` con `multiplier` (rollover del premio,
   o si es 0 el global del fueguito `getFireRolloverMultiplier`) — NO `/bonus`; reference

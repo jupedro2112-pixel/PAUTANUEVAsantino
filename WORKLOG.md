@@ -4,9 +4,25 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-09-08**
+> **Última actualización: 2026-09-16**
 
 ## Sesión 2026-09-16
+
+### 284. Slots de pixel: flags `META_PIXEL_CAPIONLY_N` (solo CAPI, sin pixel en la landing) y `META_PIXEL_ALLPURCHASES_N`
+- **Pedido owner:** un slot "espejo" con SU pixel nuevo que reciba por CAPI los eventos
+  del publicista X (`META_PIXEL_PUBLISHER_7 = X`, mismo valor que el slot 3 del
+  publicista) pero que NO se cargue en el navegador de la landing.
+- **Implementado (`metaCapiService`):** `META_PIXEL_CAPIONLY_N=1` → `pixelIdsForCampaign`
+  saltea el slot (no sale en `/api/meta-pixel-id` → la landing no lo carga); sigue
+  recibiendo registro y compra por CAPI. `META_PIXEL_ALLPURCHASES_N=1` → el slot recibe
+  TODAS las compras, no solo la primera (`_partnerAllows(eventName, opts, dest)`).
+  `meta-diag` muestra ambos flags por slot (`capiOnly`, `allPurchases`,
+  `capiTodasLasCompras`); el log de arranque agrega `[solo CAPI]` / `[todas las
+  compras]`. Valores aceptados: 1/true/on/si.
+- **Uso:** SSM `META_PIXEL_ID_7` + `META_CAPI_ACCESS_TOKEN_7` + `META_PIXEL_PUBLISHER_7`
+  (= el valor del slot del publicista) + `META_PIXEL_CAPIONLY_7=1`
+  (+ `META_PIXEL_ALLPURCHASES_7=1` si se quieren todas las cargas) → restart.
+- Back necesita redeploy.
 
 ### 283. "Publicista nuevo: llega el registro pero no la venta" — causa y diagnóstico por usuario
 - **Cómo funciona (#250):** el REGISTRO llega al pixel del publicista por DOS vías: el

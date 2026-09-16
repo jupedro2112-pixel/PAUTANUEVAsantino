@@ -15,6 +15,9 @@
 //   META_PIXEL_ID_2               — Pixel ID del partner
 //   META_CAPI_ACCESS_TOKEN_2      — Access Token CAPI del partner
 //   META_TEST_EVENT_CODE_2        — (opcional) su código de Test Events para verificar
+//   META_PIXEL_CAPIONLY_2=1       — (opcional, #284) solo CAPI: el pixel NO se carga en el
+//                                   navegador de la landing (espejo invisible)
+//   META_PIXEL_ALLPURCHASES_2=1   — (opcional, #284) recibe TODAS las compras, no solo la 1ª
 //
 // ALCANCE POR PUBLICISTA (owner 2026-08-28): cada slot de partner puede llevar
 //   META_PIXEL_PUBLISHER_N — a quién pertenece ese pixel: nombre del publicista
@@ -67,7 +70,13 @@ function _capiDestinations() {
     if (_capiActive(pid) && _capiActive(tok)) {
       dests.push({
         label: 'partner' + i, pixelId: pid, token: tok, testCode: process.env['META_TEST_EVENT_CODE_' + i],
-        scope: _parseScope(process.env['META_PIXEL_PUBLISHER_' + i])
+        scope: _parseScope(process.env['META_PIXEL_PUBLISHER_' + i]),
+        // #284: flags por slot (owner 2026-09-16):
+        //   META_PIXEL_CAPIONLY_N=1     → NO se carga en el navegador de la landing
+        //                                 (solo CAPI): un pixel "espejo" invisible.
+        //   META_PIXEL_ALLPURCHASES_N=1 → recibe TODAS las compras, no solo la 1ª.
+        capiOnly: _flagOn(process.env['META_PIXEL_CAPIONLY_' + i]),
+        allPurchases: _flagOn(process.env['META_PIXEL_ALLPURCHASES_' + i])
       });
     }
   }
@@ -141,6 +150,7 @@ async function pixelIdsForCampaign(campaignCode) {
   for (let i = 2; i <= 9; i++) {
     const pid = process.env['META_PIXEL_ID_' + i];
     if (!_capiActive(pid)) continue;
+    if (_flagOn(process.env['META_PIXEL_CAPIONLY_' + i])) continue; // #284: solo CAPI, invisible en la landing
     const dest = { scope: _parseScope(process.env['META_PIXEL_PUBLISHER_' + i]) };
     if (!dest.scope.length) continue; // sin asignar → no va al navegador
     if (_scopeAllows(dest, scope)) ids.push(String(pid).trim());
@@ -277,9 +287,11 @@ function parseCookies(cookieHeader) {
 // cargas siguientes. El pixel PROPIO sí recibe todo (para optimización propia).
 // El Purchase de la primera carga se marca con opts.firstDeposit=true desde el
 // call site (la carga sabe si es el primer depósito del cliente).
-function _partnerAllows(eventName, opts) {
+function _flagOn(v) { return /^(1|true|on|si|sí|yes)$/i.test(String(v || '').trim()); }
+function _partnerAllows(eventName, opts, dest) {
   if (eventName === 'CompleteRegistration') return true;
   if (eventName === 'Purchase' && opts && opts.firstDeposit === true) return true;
+  if (eventName === 'Purchase' && dest && dest.allPurchases) return true; // #284
   return false;
 }
 
@@ -307,7 +319,7 @@ async function sendEvent(eventName, userInfo, customData, options) {
   const _needScope = allDests.some((d) => d.label !== 'propio' && d.scope && d.scope.length);
   const scope = _needScope ? await resolveEventScope(userInfo, opts) : null;
   const dests = allDests.filter((d) =>
-    d.label === 'propio' ? true : (_partnerAllows(eventName, opts) && _scopeAllows(d, scope))
+    d.label === 'propio' ? true : (_partnerAllows(eventName, opts, d) && _scopeAllows(d, scope))
   );
   if (!dests.length) {
     return { sent: false, reason: 'filtered_for_all_destinations' };
@@ -445,12 +457,15 @@ async function diagnoseUser(u) {
     if (!_capiActive(pid)) continue;
     const tok = process.env['META_CAPI_ACCESS_TOKEN_' + i];
     const sc = _parseScope(process.env['META_PIXEL_PUBLISHER_' + i]);
+    const capiOnly = _flagOn(process.env['META_PIXEL_CAPIONLY_' + i]);
+    const allPurchases = _flagOn(process.env['META_PIXEL_ALLPURCHASES_' + i]);
     const d = { scope: sc };
     slots.push({
-      slot: 'partner' + i, pixelId: String(pid).trim(), tokenOk: _capiActive(tok), scope: sc,
-      browserRegistro: !!(sc.length && _scopeAllows(d, scope)),      // pixel del navegador en la landing
-      capiRegistro: !!(_capiActive(tok) && _scopeAllows(d, scope)),   // CompleteRegistration por CAPI
-      capiCompraFTD: !!(_capiActive(tok) && _scopeAllows(d, scope))   // Purchase por CAPI (solo si es FTD)
+      slot: 'partner' + i, pixelId: String(pid).trim(), tokenOk: _capiActive(tok), scope: sc, capiOnly, allPurchases,
+      browserRegistro: !!(!capiOnly && sc.length && _scopeAllows(d, scope)),   // pixel del navegador en la landing
+      capiRegistro: !!(_capiActive(tok) && _scopeAllows(d, scope)),            // CompleteRegistration por CAPI
+      capiCompraFTD: !!(_capiActive(tok) && _scopeAllows(d, scope)),           // Purchase por CAPI (1ª carga)
+      capiTodasLasCompras: !!(allPurchases && _capiActive(tok) && _scopeAllows(d, scope))
     });
   }
   return {
