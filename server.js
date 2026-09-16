@@ -6606,6 +6606,43 @@ app.post('/api/users', authMiddleware, adminMiddleware, async (req, res) => {
 // (Conversions API) en cada evento. Sirve para comparar registro vs compra sin
 // depender del número agregado de Meta. Filtros opcionales: ?event=Purchase,
 // ?userId=..., ?limit=N (máx 500). Solo admin.
+// #283 GET /api/admin/meta-diag?username=X — "llega el registro pero no la venta":
+// muestra la atribución del usuario, el publicista resuelto, qué slot de pixel
+// recibiría registro/compra (y por qué no), si su próxima/última carga cuenta como
+// PRIMERA (los partners SOLO reciben la primera compra), y sus eventos enviados.
+app.get('/api/admin/meta-diag', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const key = String((req.query && req.query.username) || '').trim();
+    if (!key) return res.status(400).json({ error: 'Falta ?username=' });
+    const u = await findUserByUsernameCI(key) || await User.findOne({ id: key }).lean();
+    if (!u) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const [diag, deposits, events, camp] = await Promise.all([
+      metaCapi.diagnoseUser(u),
+      Transaction.countDocuments({ userId: String(u.id), type: 'deposit', 'metadata.source': { $ne: 'payout_refund' } }),
+      require('./src/models/MetaEventLog').find({ userId: String(u.id) }).sort({ createdAt: -1 }).limit(20).lean(),
+      (u.lastTouchCampaign || u.acquisitionCampaign || u.giroxOwnerCampaign)
+        ? Campaign.findOne({ code: String(u.lastTouchCampaign || u.acquisitionCampaign || u.giroxOwnerCampaign).toUpperCase() }).select('code publisher isActive').lean()
+        : null
+    ]);
+    const motivos = [];
+    if (!diag.scope || !diag.scope.campaignCode) motivos.push('El usuario NO tiene campaña atribuida (lastTouchCampaign / acquisitionCampaign / giroxOwnerCampaign vacíos) → ningún pixel de partner recibe sus eventos por CAPI. El registro pudo llegar por el pixel del NAVEGADOR de la landing (usa el código de la URL, no la base).');
+    else if (!camp) motivos.push(`La campaña "${diag.scope.campaignCode}" NO existe en el panel (o el código no coincide exacto) → sin publicista resuelto.`);
+    else if (!camp.publisher) motivos.push(`La campaña ${camp.code} no tiene "publicista" cargado → el slot solo matchea si META_PIXEL_PUBLISHER_N tiene el CÓDIGO de campaña.`);
+    if (!diag.slots.some((s) => s.capiCompraFTD)) motivos.push('Ningún slot de partner (META_PIXEL_ID_N + META_CAPI_ACCESS_TOKEN_N + META_PIXEL_PUBLISHER_N) matchea a este usuario → la compra por CAPI no tiene destino. Para un publicista NUEVO hay que cargar su slot en SSM y reiniciar.');
+    if (deposits > 1) motivos.push(`El usuario tiene ${deposits} cargas reales: los partners SOLO reciben la PRIMERA (FTD). Las siguientes se filtran a propósito.`);
+    if (deposits === 0) motivos.push('El usuario todavía no tiene cargas reales registradas.');
+    const purchases = events.filter((e) => e.eventName === 'Purchase');
+    if (deposits >= 1 && !purchases.length) motivos.push('No hay ningún Purchase en el log de eventos para este usuario: la carga entró por un camino sin CAPI (ej. carga anterior al deploy, o el pixel/token estaba mal en ese momento).');
+    res.json({
+      user: { id: u.id, username: u.username, lastTouchCampaign: u.lastTouchCampaign || null, acquisitionCampaign: u.acquisitionCampaign || null, giroxOwnerCampaign: u.giroxOwnerCampaign || null, createdAt: u.createdAt, hasFbc: !!u.metaFbc, hasFbp: !!u.metaFbp, hasPhone: !!u.phone },
+      campaign: camp, scope: diag.scope, propioConfigurado: diag.propioConfigurado, slots: diag.slots,
+      cargasReales: deposits, esPrimeraCarga: deposits === 1,
+      eventos: events.map((e) => ({ at: e.createdAt, event: e.eventName, destinos: e.destinations, value: e.value, contentName: e.contentName })),
+      motivos
+    });
+  } catch (e) { logger.warn(`[meta-diag] ${e.message}`); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
 app.get('/api/admin/meta-events', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const MetaEventLog = require('./src/models/MetaEventLog');

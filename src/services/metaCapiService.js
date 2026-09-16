@@ -434,7 +434,33 @@ function valueCategory(amount) {
   return 'whale';
 }
 
+// #283 — DIAGNÓSTICO por usuario: qué pixels recibirían su registro y su compra,
+// y por qué no (sin token, sin alcance, scope que no matchea). Para el panel.
+async function diagnoseUser(u) {
+  const scope = await resolveEventScope({ externalId: u.id }, {});
+  const slots = [];
+  const dests = _capiDestinations();
+  for (let i = 2; i <= 9; i++) {
+    const pid = process.env['META_PIXEL_ID_' + i];
+    if (!_capiActive(pid)) continue;
+    const tok = process.env['META_CAPI_ACCESS_TOKEN_' + i];
+    const sc = _parseScope(process.env['META_PIXEL_PUBLISHER_' + i]);
+    const d = { scope: sc };
+    slots.push({
+      slot: 'partner' + i, pixelId: String(pid).trim(), tokenOk: _capiActive(tok), scope: sc,
+      browserRegistro: !!(sc.length && _scopeAllows(d, scope)),      // pixel del navegador en la landing
+      capiRegistro: !!(_capiActive(tok) && _scopeAllows(d, scope)),   // CompleteRegistration por CAPI
+      capiCompraFTD: !!(_capiActive(tok) && _scopeAllows(d, scope))   // Purchase por CAPI (solo si es FTD)
+    });
+  }
+  return {
+    propioConfigurado: dests.some((d) => d.label === 'propio'),
+    scope, slots
+  };
+}
+
 module.exports = {
+  diagnoseUser,
   isConfigured,
   newEventId,
   extractRequestContext,

@@ -8,6 +8,27 @@
 
 ## Sesión 2026-09-16
 
+### 283. "Publicista nuevo: llega el registro pero no la venta" — causa y diagnóstico por usuario
+- **Cómo funciona (#250):** el REGISTRO llega al pixel del publicista por DOS vías: el
+  pixel del NAVEGADOR en la landing (`/api/meta-pixel-id?c=CODIGO` → elige los slots
+  cuyo `META_PIXEL_PUBLISHER_N` incluye ese código/publicista, usando el código de la
+  URL) y CAPI. La VENTA (Purchase) va SOLO por CAPI y SOLO si es la PRIMERA carga
+  (`_isFirstDeposit`), con el alcance resuelto desde la BASE
+  (`lastTouchCampaign → acquisitionCampaign → giroxOwnerCampaign → Campaign.publisher`).
+- **Por qué falla con un publicista nuevo:** (a) no tiene slot propio en SSM
+  (`META_PIXEL_ID_N` + `META_CAPI_ACCESS_TOKEN_N` + `META_PIXEL_PUBLISHER_N`) o falta
+  el token → el registro entra igual por el pixel del navegador, la compra no tiene
+  destino CAPI; (b) el código de la URL de la landing no existe como Campaign en el
+  panel (o no coincide exacto / sin "publicista") → el navegador dispara igual, pero
+  el usuario queda sin atribución en la base y el Purchase se filtra; (c) el usuario
+  ya tenía una carga (solo FTD); (d) la carga entró por un camino sin CAPI. El boot
+  actual solo tiene 3 slots (Ok2026, PWAUTO test, santino) y el pixel propio en `no`.
+- **Nuevo:** `GET /api/admin/meta-diag?username=X` (admin): atribución del usuario,
+  campaña/publicista resuelto, por cada slot si recibiría registro (navegador/CAPI)
+  y compra, cantidad de cargas reales (¿es FTD?), sus eventos en `MetaEventLog` y una
+  lista de `motivos` en castellano. `metaCapi.diagnoseUser(u)` en el servicio.
+- Back necesita redeploy.
+
 ### 282. Cartel "¡Carga acreditada!" de la PWA muestra el bono y su ROLLOVER
 - **Pedido owner:** en el recuadro verde (saldo + "¡A JUGAR!") que diga ROLLOVER xN.
 - **Backend:** el evento `balance_updated` lleva `bonusAmount` y `rolloverX` cuando la
