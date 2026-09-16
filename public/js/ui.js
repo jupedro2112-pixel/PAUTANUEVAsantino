@@ -175,7 +175,7 @@ VIP.ui = (function () {
     // Saldo empujado por SOCKET (el server emite `balance_updated` al acreditar
     // una carga, premio o devolución): mismo tratamiento que el polling, pero
     // instantáneo — el cliente ve la invitación al casino apenas el agente carga.
-    function handleBalancePush(balance) {
+    function handleBalancePush(balance, info) {
         const newBalance = parseFloat(balance);
         if (!Number.isFinite(newBalance)) return;
         if (VIP.state.currentUser) VIP.state.currentUser.balance = newBalance;
@@ -188,7 +188,7 @@ VIP.ui = (function () {
                 // del admin) — el cliente se da cuenta (owner 2026-08-21). El
                 // cartel de invitación viejo solo si NO está en el casino.
                 if (VIP.ui.casinoBotDepositConfirmed) {
-                    try { VIP.ui.casinoBotDepositConfirmed(newBalance); } catch (e) {}
+                    try { VIP.ui.casinoBotDepositConfirmed(newBalance, info); } catch (e) {}
                 } else {
                     showCasinoInvite(newBalance);
                 }
@@ -3334,7 +3334,7 @@ VIP.ui._playChime = function() {
  *  centrado + sonido para que el cliente se dé cuenta (owner 2026-08-21),
  *  y confirmación en el asistente. Sirve para carga automática Y manual del
  *  admin (ambas emiten balance_updated). */
-VIP.ui.casinoBotDepositConfirmed = function(newBalance) {
+VIP.ui.casinoBotDepositConfirmed = function(newBalance, info) {
   // Cortar la cuenta regresiva del comprobante: la carga LLEGÓ.
   clearInterval(VIP.ui._botCdTimer);
   VIP.ui._botCdTimer = null;
@@ -3351,6 +3351,21 @@ VIP.ui.casinoBotDepositConfirmed = function(newBalance) {
     document.body.appendChild(ov);
   }
   const amt = (Number(newBalance) || 0).toLocaleString('es-AR');
+  // #282: si la carga incluyó BONO, el cartel dice cuánto y con qué ROLLOVER
+  // (el global del panel; viene en el evento balance_updated).
+  let bonusHtml = '';
+  const bAmt = info && Number(info.bonusAmount) > 0 ? Number(info.bonusAmount) : 0;
+  if (bAmt > 0) {
+    const rx = info && info.rolloverX != null ? Number(info.rolloverX) : null;
+    const rollTxt = rx == null ? '' : (rx > 0
+      ? '🎯 ROLLOVER x' + rx + ': apostá ' + rx + ' veces el bono para poder retirarlo'
+      : '✅ Sin rollover: podés retirarlo cuando quieras');
+    bonusHtml =
+      '<div style="background:rgba(255,215,0,0.12);border:1px solid #ffd70066;border-radius:12px;padding:9px 10px;margin:0 0 14px;">' +
+        '<div style="color:#ffd700;font-weight:900;font-size:14px;">🎁 Incluye $' + bAmt.toLocaleString('es-AR') + ' de bono</div>' +
+        (rollTxt ? '<div style="color:#ffe9a6;font-size:12px;margin-top:3px;">' + rollTxt + '</div>' : '') +
+      '</div>';
+  }
   ov.innerHTML =
     '<div style="width:min(90vw,360px);background:linear-gradient(155deg,#0d3b23,#0a2e1b);' +
     'border:2px solid #25d366;border-radius:22px;padding:26px 22px;text-align:center;' +
@@ -3358,7 +3373,8 @@ VIP.ui.casinoBotDepositConfirmed = function(newBalance) {
       '<div style="font-size:52px;line-height:1;">✅</div>' +
       '<div style="color:#25d366;font-weight:900;font-size:24px;margin:8px 0 2px;">¡Carga acreditada!</div>' +
       '<div style="color:#cfe9d8;font-size:14px;">Tu saldo ahora es</div>' +
-      '<div style="color:#fff;font-weight:900;font-size:34px;margin:4px 0 16px;">$' + amt + '</div>' +
+      '<div style="color:#fff;font-weight:900;font-size:34px;margin:4px 0 ' + (bonusHtml ? '10px' : '16px') + ';">$' + amt + '</div>' +
+      bonusHtml +
       '<button type="button" onclick="VIP.ui._hideCasinoDepositToast()" ' +
         'style="width:100%;background:#25d366;color:#04310f;border:none;border-radius:14px;padding:14px;' +
         'font-size:16px;font-weight:900;cursor:pointer;">🎰 ¡A JUGAR!</button>' +
@@ -3372,7 +3388,9 @@ VIP.ui.casinoBotDepositConfirmed = function(newBalance) {
   if (drawer && (drawer.style.display === 'none' || !drawer.style.display)) VIP.ui.openCasinoChat();
   if (VIP.ui._casinoChatPh) return; // en modo soporte no se pisa el chat real
   VIP.ui._botStarted = true;
-  VIP.ui._botMsg('💰 <b>¡Carga acreditada!</b> Tu saldo ahora es <b>$' + amt + '</b> 🎰');
+  VIP.ui._botMsg('💰 <b>¡Carga acreditada!</b> Tu saldo ahora es <b>$' + amt + '</b> 🎰' +
+    (bAmt > 0 ? '<br>🎁 Incluye $' + bAmt.toLocaleString('es-AR') + ' de bono' +
+      (info && info.rolloverX > 0 ? ' · 🎯 ROLLOVER x' + Number(info.rolloverX) : (info && info.rolloverX === 0 ? ' · sin rollover' : '')) : ''));
 };
 
 VIP.ui._hideCasinoDepositToast = function() {

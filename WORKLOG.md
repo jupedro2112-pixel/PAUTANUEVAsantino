@@ -8,6 +8,18 @@
 
 ## Sesión 2026-09-16
 
+### 282. Cartel "¡Carga acreditada!" de la PWA muestra el bono y su ROLLOVER
+- **Pedido owner:** en el recuadro verde (saldo + "¡A JUGAR!") que diga ROLLOVER xN.
+- **Backend:** el evento `balance_updated` lleva `bonusAmount` y `rolloverX` cuando la
+  carga incluyó bono (auto-carga hgcash con 1ª carga/ruleta/lote, carga manual con
+  bonus, bono manual — este último con `rolloverApplied` que devuelve giroxService).
+  Sin bono no cambia el payload.
+- **PWA (`ui.js`/`socket.js`):** `handleBalancePush(balance, info)` →
+  `casinoBotDepositConfirmed(newBalance, info)`: recuadro dorado dentro del cartel
+  "🎁 Incluye $X de bono · 🎯 ROLLOVER xN: apostá N veces el bono para poder retirarlo"
+  (x0 → "Sin rollover"). La línea del asistente también lo dice. **SW → v162.**
+- **Validado:** `node --check` OK. Back + front necesitan deploy.
+
 ### 281. Los mensajes automáticos de bono dicen qué ROLLOVER tiene (el global del panel)
 - **Pedido owner:** que todo mensaje automático que anuncia un bono (1ª carga, bonus,
   reembolso, etc.) incluya "el bono incluye ROLLOVER x" con el valor configurado.

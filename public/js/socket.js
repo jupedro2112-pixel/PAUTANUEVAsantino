@@ -187,7 +187,7 @@ VIP.socket = (function () {
         // emitía desde el server y el cliente NO lo escuchaba (solo polling 30s).
         VIP.state.socket.on('balance_updated', function (data) {
             if (data && data.balance !== undefined && VIP.ui && VIP.ui.handleBalancePush) {
-                try { VIP.ui.handleBalancePush(data.balance); } catch (e) { /* nunca romper el socket */ }
+                try { VIP.ui.handleBalancePush(data.balance, data); } catch (e) { /* nunca romper el socket */ }
             }
         });
 

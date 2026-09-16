@@ -2775,7 +2775,12 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
     }
     // Por ROOM (no el Map local): con multi-instancia, el Map solo ve los
     // sockets de ESTA instancia — el room cruza instancias vía el adapter Redis.
-    if (newBalance !== null) io.to(`user_${user.id}`).emit('balance_updated', { balance: newBalance });
+    if (newBalance !== null) {
+      // #282: el cartel "¡Carga acreditada!" de la PWA muestra el bono y su ROLLOVER.
+      const _bp = { balance: newBalance };
+      if (_hgBonusApplied) { _bp.bonusAmount = _hgBonus; try { _bp.rolloverX = await applyGlobalRollover(await getGiroxBonusMultiplier()); } catch (_) {} }
+      io.to(`user_${user.id}`).emit('balance_updated', _bp);
+    }
 
     // SLA: la auto-carga ES la respuesta al cliente → frena el reloj de demoras
     // (antes quedaba como "sin respuesta" porque la carga es automática, no un agente).
@@ -9216,7 +9221,10 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
       // balance real — si falló el lookup, omitimos para no escribir "null" en UI.
       // Por ROOM (cruza instancias vía Redis; el Map local no ve sockets ajenos).
       if (newBalance !== null) {
-        io.to(`user_${user.id}`).emit('balance_updated', { balance: newBalance });
+        // #282: bono + ROLLOVER para el cartel de la PWA.
+        const _bp = { balance: newBalance };
+        if (_effBonusApplied > 0) { _bp.bonusAmount = _effBonusApplied; try { _bp.rolloverX = await applyGlobalRollover(await getGiroxBonusMultiplier()); } catch (_) {} }
+        io.to(`user_${user.id}`).emit('balance_updated', _bp);
       }
 
       // Push FCM para usuarios offline. El título/body reflejan el outcome REAL
@@ -9464,7 +9472,11 @@ app.post('/api/admin/withdrawal', authMiddleware, withdrawerMiddleware, async (r
       // balance real — si falló el lookup, omitimos para no escribir "null" en UI.
       // Por ROOM (cruza instancias vía Redis; el Map local no ve sockets ajenos).
       if (newBalance !== null) {
-        io.to(`user_${user.id}`).emit('balance_updated', { balance: newBalance });
+        // #282: bono manual → cartel con monto y ROLLOVER aplicado.
+        const _bp = { balance: newBalance, bonusAmount: bonusAmount };
+        if (depositResult && depositResult.rolloverApplied != null) _bp.rolloverX = depositResult.rolloverApplied;
+        else { try { _bp.rolloverX = await applyGlobalRollover(await getGiroxBonusMultiplier()); } catch (_) {} }
+        io.to(`user_${user.id}`).emit('balance_updated', _bp);
       }
 
       // Push FCM para usuarios offline.
