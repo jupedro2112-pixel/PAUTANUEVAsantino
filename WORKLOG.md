@@ -8,6 +8,17 @@
 
 ## Sesión 2026-09-18
 
+### 287. La ruleta explica "cómo funciona" el % (tope del 100 % + rollover)
+- **Pedido owner:** en la pantalla del premio de la ruleta de bienvenida, decir que el
+  100 % tiene tope en $5.000 y después aplica el 20 %.
+- **PWA (`ui.js`):** `_wrBonusRuleTxt(pct)` arma la frase con los valores REALES del panel
+  (`/api/rewards/summary → bonusRules`): "🎁 Cómo funciona: el 100 % aplica hasta $5.000
+  de tu carga; sobre lo que cargues de más te sumamos el 20 %. Ej.: cargás $20.000 →
+  $8.000 de bono. Entra como bono con ROLLOVER x3…". Con premios < 100 % dice "te
+  sumamos el X %". Se muestra en 3 lugares: resultado del giro (overlay), tarjeta del
+  hub con % pendiente, y "🎡 Mi premio de la ruleta" del asistente. SW → v165.
+- Solo front. Validado `node --check`.
+
 ### 286. Sin DOBLE 100 %: cobrar el 100 % de primera carga deja la ruleta de bienvenida USADA
 - **Caso owner:** viene de publicidad (tiene el 100 % de 1ª carga activo), carga sin girar
   → cobra el 100 %; después gira la ruleta y saca "100 % EXTRA" → otro 100 %.

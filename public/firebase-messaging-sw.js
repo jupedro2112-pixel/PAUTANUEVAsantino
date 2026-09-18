@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v164'; // v164: ruleta de bienvenida marcada como usada cuando el 100% de 1ª carga ya se cobró (sin doble 100%)
+const CACHE_VERSION = 'v165'; // v165: la ruleta explica cómo funciona el % (tope del 100% + rollover) al ganar, en el hub y en Mi premio
+// v164: // v164: ruleta de bienvenida marcada como usada cuando el 100% de 1ª carga ya se cobró (sin doble 100%)
 // v163: // v163: info del hub — bonos con tope del 100%, rollover cuenta deportes, ruleta bienvenida solo auto-registro
 // v162: // v162: cartel ¡Carga acreditada! muestra el bono y su ROLLOVER
 // v161: // v161: sonido de mensaje nuevo (AudioContext desbloqueado con el primer gesto) + scroll instantáneo al último mensaje (sin smooth que se quedaba corto)

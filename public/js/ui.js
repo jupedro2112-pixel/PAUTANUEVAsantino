@@ -2461,7 +2461,7 @@ VIP.ui._renderRoulettePrize = function() {
     if (p.type === 'cash') {
       estado = '💰 <b>Acreditado en tu saldo</b>' + (p.rolloverX > 0 ? ' — para retirarlo tenés que apostar ' + p.rolloverX + ' veces el premio.' : '.');
     } else if (p.status === 'pending') {
-      estado = '⏳ <b>Pendiente</b> — se te suma automáticamente en tu <b>próxima carga</b> (' + _wrEsc(String(p.value)) + '% extra).';
+      estado = '⏳ <b>Pendiente</b> — se te suma automáticamente en tu <b>próxima carga</b> (' + _wrEsc(String(p.value)) + '% extra).' + _wrBonusRuleTxt(p.value);
     } else {
       estado = '✅ <b>Ya aplicado</b>' + (p.usedAt ? ' el ' + fmt(p.usedAt) : '') + ' en una carga.';
     }
@@ -2589,6 +2589,26 @@ VIP.ui._refreshRewards = function() {
   }).catch(function() {});
 };
 
+// #287: frase "cómo funciona" para un premio en % (ruleta bienvenida/diaria):
+// tope del 100 % (hasta $X, después Y %) + rollover, con los valores reales del
+// panel (vienen en /api/rewards/summary → bonusRules). Sin datos → genérico.
+function _wrBonusRuleTxt(pct) {
+  var br = (VIP.ui._rwSummary && VIP.ui._rwSummary.bonusRules) || null;
+  var p = Number(pct) || 0, parts = [];
+  if (p >= 100 && br && br.capEnabled && br.capArs > 0) {
+    var ej = 20000, b1 = Math.min(ej, br.capArs) * p / 100, b2 = Math.max(0, ej - br.capArs) * (br.restPct || 0) / 100;
+    parts.push('El <b>' + p + '%</b> aplica hasta <b>' + _rwFmt(br.capArs) + '</b> de tu carga; sobre lo que cargues de más te sumamos el <b>' + (br.restPct || 0) + '%</b>. ' +
+      'Ej.: cargás ' + _rwFmt(ej) + ' → <b>' + _rwFmt(Math.round(b1 + b2)) + ' de bono</b>.');
+  } else if (p > 0) {
+    parts.push('Te sumamos el <b>' + p + '%</b> de lo que cargues.');
+  }
+  if (br && br.rolloverX != null) {
+    parts.push(br.rolloverX > 0
+      ? 'Entra como bono con <b>ROLLOVER x' + br.rolloverX + '</b>: se juega al instante y se retira después de apostar ' + br.rolloverX + ' veces el bono.'
+      : 'Entra como bono <b>sin rollover</b>.');
+  }
+  return parts.length ? '<div style="font-size:12px;opacity:.85;margin-top:8px;line-height:1.45;">🎁 <b>Cómo funciona:</b> ' + parts.join(' ') + '</div>' : '';
+}
 // #285: bloque "🎁 BONOS" del recuadro INFORMACIÓN — reglas reales del panel.
 function _rwBonusRulesHtml(br, li) {
   if (!br) return '';
@@ -2665,7 +2685,7 @@ VIP.ui.openRewardsHub = function() {
     } else if (wPending) {
       const p = w.prize;
       body = '<div style="font-size:13px;color:#cfd6de;">Tu premio: <b style="color:#ffd700;font-size:16px;">' + _wrEsc(p.label || '') + '</b><br>' +
-        '<span style="font-size:12px;">⏳ ' + _wrEsc(String(p.value)) + '% EXTRA pendiente — se suma en tu próxima carga</span></div>';
+        '<span style="font-size:12px;">⏳ ' + _wrEsc(String(p.value)) + '% EXTRA pendiente — se suma en tu próxima carga</span>' + _wrBonusRuleTxt(p.value) + '</div>';
       cta = _rwCta('💳 Cargar y usarlo', "VIP.ui.closeRewardsHub();VIP.ui.casinoBotGo('deposit')", true);
     } else if (w.prize && w.prize.status === 'used' && w.prize.usedBy === 'bono 1ª carga') {
       // #286: no giró, pero cobró el 100% de primera carga → es el mismo regalo.
@@ -3286,7 +3306,7 @@ VIP.ui.casinoRouletteSpin = function() {
         const detalle = isCash
           ? '💰 Ya está <b>ACREDITADO</b> en tu saldo. ¡A jugar! 🎰' +
             (p.rolloverX > 0 ? '<br><span style="font-size:12px;opacity:.8;">Para retirarlo, apostá ' + p.rolloverX + ' veces el premio.</span>' : '')
-          : 'Se te aplica en tu <b>PRÓXIMA CARGA</b> — cargá y lo sumamos automáticamente. 💪';
+          : 'Se te aplica en tu <b>PRÓXIMA CARGA</b> — cargá y lo sumamos automáticamente. 💪' + _wrBonusRuleTxt(p.value);
         // Resultado en el overlay (pantalla completa).
         const rEl = document.getElementById('wrResult');
         if (rEl) {
