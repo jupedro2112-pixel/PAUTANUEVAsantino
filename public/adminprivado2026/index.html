@@ -674,6 +674,23 @@ document.addEventListener('change', function (ev) {
                                 <input type="number" id="fcbPercent" min="1" max="500" step="5" placeholder="100" style="width:100%;">
                                 <small style="color:#aaa;font-size:11px;">100 = duplica la primera carga. Máx 500.</small>
                             </div>
+                            <!-- #285 TOPE del bono del 100% (aplica a TODO bono automático de 100%: 1ª carga, ruleta, lote) -->
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                    <input type="checkbox" id="fcbCapEnabled" style="width:auto;"> Limitar los bonos del 100%
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                <div class="form-group" style="flex:1;min-width:140px;">
+                                    <label>100% hasta ($ de la carga)</label>
+                                    <input type="number" id="fcbCapArs" min="0" step="500" placeholder="5000">
+                                </div>
+                                <div class="form-group" style="flex:1;min-width:140px;">
+                                    <label>% sobre lo que cargue de más</label>
+                                    <input type="number" id="fcbRestPct" min="0" max="100" step="5" placeholder="20">
+                                </div>
+                            </div>
+                            <small id="fcbCapHint" style="color:#aaa;font-size:11px;display:block;margin:-4px 0 10px;"></small>
                             <button type="button" class="btn btn-primary" onclick="saveFirstChargeBonus()">💾 Guardar</button>
                         </div>
 
@@ -687,6 +704,8 @@ document.addEventListener('change', function (ev) {
                                 <b>probabilidad (peso)</b>: a mayor peso, más seguido sale. Tipos:
                                 <b>% EXTRA</b> = se suma automático en su próxima carga y queda marcado como usado;
                                 <b>SALDO $</b> = se acredita al instante (con o sin rollover). Todo modificable acá.
+                                <br><b style="color:#ffd166;">⚠️ Solo para cuentas que se registró el propio cliente</b> (app / landing): las
+                                creadas por un agente desde el panel (alta manual) NO ven la ruleta (#285).
                             </p>
                             <div class="form-group">
                                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">

@@ -221,3 +221,37 @@ async function _findHolderConflict(userId, holderName) {
 | Llega el movimiento del banco para @b con `fromName` = titular usado en @a (sin `BankMovement` previo de @a, solo comprobante) | carga sin bonos + alerta |
 | Panel → chat de @b → banner amarillo | señal 🧾 "el MISMO titular en los comprobantes" con @a |
 | Comprobante viejo (sin `originHolderKey`) del mismo titular | igual detecta (regex por nombre) |
+
+---
+
+# C) REGLAS DE BONOS (2026-09-18, WORKLOG #285 de PAUTANUEVAsantino)
+
+## C.1 Ruleta de bienvenida SOLO para auto-registro
+Cuentas creadas por un agente desde el panel (alta manual: `createdByAgent:true` o
+`acquisitionSource:'manual'`) NO reciben la ruleta de bienvenida. Aplicar en: status
+(`canSpin:false`, `ineligible:'manual'`), resumen del hub (la PWA no dibuja la tarjeta)
+y en el SPIN (condición dentro de la reserva atómica; error `MANUAL_SIGNUP`). Aviso en
+la card de la ruleta del panel.
+
+## C.2 Tope del bono del 100 %
+Todo bono AUTOMÁTICO del 100 % (primera carga, ruleta con premio 100 %, lote 100 %,
+bono de instalación si existe) se calcula así:
+```
+bono = min(carga, capArs) × 100% + max(0, carga − capArs) × restPct
+       defaults: capArs = 5.000, restPct = 20 %   → carga 20.000 → 5.000 + 3.000 = 8.000
+```
+Config en la card del bono de primera carga (`capEnabled`, `capArs`, `restPct`) con
+hint de ejemplo. Bonos < 100 % no se tocan. El monto que tipea el agente a mano no se
+toca. Aplicar en TODOS los puntos que calculan `amount × pct / 100` para bonos
+automáticos (carga manual y auto-carga por webhook del banco).
+**Banner del panel** ("BONO APP: 100% en la próxima carga" / "RULETA PENDIENTE: 100%"):
+detallar la regla: "100% hasta $5.000 + 20% del resto (ej. carga $20.000 → $8.000)".
+
+## C.3 Texto del rollover: DEPORTES SÍ suma
+El rollover de 1girox progresa sobre TODAS las apuestas (casino y deportes) — lo confirmó
+soporte. Corregir cualquier texto que diga "deportes no suma para el rollover".
+Lo que sí sigue: "DEPORTES NO genera reembolso" (el netwin del reembolso es solo casino).
+
+## C.4 Bloque "🎁 CÓMO FUNCIONAN LOS BONOS" en la INFORMACIÓN del hub
+Con valores reales del panel: % de primera carga, tope del 100 % con ejemplo numérico,
+rollover global efectivo, y que la ruleta de bienvenida es solo para auto-registro.

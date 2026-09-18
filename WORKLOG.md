@@ -6,6 +6,38 @@
 >
 > **Última actualización: 2026-09-16**
 
+## Sesión 2026-09-18
+
+### 285. Ruleta de bienvenida solo para auto-registro + TOPE del bono 100% ($5.000 + 20% del resto) + rollover cuenta DEPORTES
+- **Pedido owner (3 cosas):**
+  1. **Cliente registrado "manualmente" (alta por un agente desde el panel) NO recibe la
+     ruleta de bienvenida.** Gate `_welcomeRouletteEligible(u)` = no `createdByAgent` ni
+     `acquisitionSource:'manual'`. Aplica en `/api/welcome-roulette/status` y en el
+     resumen del hub (`canSpin:false` + `ineligible:'manual'` → la PWA no dibuja la
+     tarjeta) y en el SPIN (el filtro va en la reserva atómica; si no matchea por ese
+     motivo responde `MANUAL_SIGNUP`). Aviso en la card del panel.
+  2. **Bono del 100% con TOPE:** el 100% aplica solo hasta `capArs` (default $5.000) de la
+     carga; sobre el resto va `restPct` (default 20%). Ej: carga $20.000 → $5.000 + $3.000
+     = **$8.000**. Vale para TODO bono automático de 100 % (1ª carga, ruleta % 100, lote
+     % 100 — manual y auto-carga hgcash): `_bonusWithCap(amount, pct, cfg)` /
+     `computeAutoBonus`. Config en `firstChargeBonus` (`capEnabled/capArs/restPct`),
+     card "Bono de primera carga" del panel con los 2 campos + hint con ejemplo en vivo.
+     Bonos < 100 % no cambian. El bonus que tipea el agente a mano tampoco (es un monto).
+  3. **Texto del rollover:** decía "se completa con SLOTS y RULETA, deportes NO suma" y
+     es falso (soporte 1girox: el rollover progresa sobre todas las apuestas). Ahora:
+     "se completa con cualquier apuesta: slots, casino en vivo y deportes" (hub + frase
+     `{rollover_txt}` de los mensajes). "DEPORTES NO genera reembolso" sigue (netwin
+     solo casino).
+- **INFORMACIÓN del hub (PWA):** bloque nuevo "🎁 CÓMO FUNCIONAN LOS BONOS" con los
+  valores reales del panel (`/api/rewards/summary` → `bonusRules`): % de 1ª carga,
+  tope del 100 % con ejemplo, rollover global, y que la ruleta es solo para
+  auto-registro. **SW → v163, admin-sw → v55.**
+- **Nota:** la captura del banner verde "BONO APP: 100% en la próxima carga" es del panel
+  de OTRO repo (nardo; acá el bono de instalación está neutralizado #234). Va en la
+  espec portable para que lo detallen allá.
+- **Validado:** `node --check` OK; fórmula del tope probada (20.000@100 → 8.000;
+  5.000@100 → 5.000; 20.000@50 → 10.000). Back + front necesitan deploy.
+
 ## Sesión 2026-09-16
 
 ### 284. Slots de pixel: flags `META_PIXEL_CAPIONLY_N` (solo CAPI, sin pixel en la landing) y `META_PIXEL_ALLPURCHASES_N`

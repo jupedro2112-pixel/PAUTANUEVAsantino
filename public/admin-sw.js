@@ -34,7 +34,7 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 // Bump this version with every deploy so the admin PWA always loads fresh code.
-const CACHE_VERSION = 'v54'; // v54: iconos banco/titular en el banner de multicuenta. v53: card Rollover GLOBAL de bonos (x0/x2/x3/x5/x10). v52: sesion deslizante (token cada 30 min, re-auth del socket sin recargar). v51: transacciones con origen (ruleta diaria/bienvenida, cashback, lote...) + labels rakeback/VIP. v50: lote 'solo aviso' + compositor/difusion viejos ocultos. v49: rollover propio del % automatico del lote. v48: lote con regalo — % AUTOMATICO en la carga (primera/todas + franja horaria) + audiencia por segmento
+const CACHE_VERSION = 'v55'; // v55: tope del bono 100% (hasta $ + % del resto) en la card de 1ª carga + aviso ruleta solo auto-registro. v54: iconos banco/titular en el banner de multicuenta. v53: card Rollover GLOBAL de bonos (x0/x2/x3/x5/x10). v52: sesion deslizante (token cada 30 min, re-auth del socket sin recargar). v51: transacciones con origen (ruleta diaria/bienvenida, cashback, lote...) + labels rakeback/VIP. v50: lote 'solo aviso' + compositor/difusion viejos ocultos. v49: rollover propio del % automatico del lote. v48: lote con regalo — % AUTOMATICO en la carga (primera/todas + franja horaria) + audiencia por segmento
 // v46: // v46: banner de RULETA de bienvenida en el chat (pendiente/usado/acreditado + marcar usado) y refresco tras carga
 // v45: // v45: FIX sonido fantasma (solo suena con mensajes REALES del cliente, no los de sistema) + sacada la seccion Comunidad (derivar + pestana + alertas)
 const CACHE_NAME = 'admin-sala-' + CACHE_VERSION;

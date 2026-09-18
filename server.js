@@ -542,17 +542,38 @@ async function _isFirstDeposit(userId) {
 // BONO DE PRIMERA CARGA (100% a TODOS, una sola vez — owner 2026-08-22)
 // Config['firstChargeBonus'] = { enabled, percent } (default off, 100%).
 // ============================================================
+// #285 (owner 2026-09-18): TOPE del bono del 100% — el 100% aplica solo hasta
+// `capArs` de la carga; sobre el resto va `restPct`. Ej: carga $20.000 →
+// $5.000 (100% de los primeros 5.000) + $3.000 (20% de 15.000) = $8.000.
+// Vale para TODO bono automático de 100% (1ª carga, ruleta 100%, lote 100%).
+const BONUS100_CAP_DEFAULT = { capEnabled: true, capArs: 5000, restPct: 20 };
 async function getFirstChargeBonusConfig() {
   try {
     const raw = await getConfig('firstChargeBonus', null);
     if (raw && typeof raw === 'object') {
       return {
         enabled: raw.enabled === true,
-        percent: Math.max(0, Math.min(500, Math.round(Number(raw.percent) || 0)))
+        percent: Math.max(0, Math.min(500, Math.round(Number(raw.percent) || 0))),
+        capEnabled: raw.capEnabled !== false,
+        capArs: Math.max(0, Math.round(Number(raw.capArs))) || BONUS100_CAP_DEFAULT.capArs,
+        restPct: Number.isFinite(Number(raw.restPct)) ? Math.max(0, Math.min(100, Math.round(Number(raw.restPct)))) : BONUS100_CAP_DEFAULT.restPct
       };
     }
   } catch (_) {}
-  return { enabled: false, percent: 100 };
+  return { enabled: false, percent: 100, ...BONUS100_CAP_DEFAULT };
+}
+// Monto de un bono AUTOMÁTICO en % sobre una carga, con el tope del 100% (#285).
+function _bonusWithCap(amount, pct, cfg) {
+  const a = Math.max(0, Number(amount) || 0), p = Math.max(0, Number(pct) || 0);
+  if (cfg && cfg.capEnabled !== false && p >= 100 && cfg.capArs > 0 && a > cfg.capArs) {
+    return Math.round(cfg.capArs * p / 100 + (a - cfg.capArs) * (Number(cfg.restPct) || 0) / 100);
+  }
+  return Math.round(a * p / 100);
+}
+async function computeAutoBonus(amount, pct) {
+  let cfg = null;
+  try { cfg = await getFirstChargeBonusConfig(); } catch (_) {}
+  return _bonusWithCap(amount, pct, cfg || BONUS100_CAP_DEFAULT);
 }
 
 // Reclama (ATÓMICO) el bono de primera carga. Devuelve {bonus, claimed}.
@@ -722,7 +743,7 @@ async function claimFirstChargeBonus(user, amount) {
       { new: false }
     ).lean();
     if (!claimed) return { bonus: 0, claimed: false };
-    return { bonus: Math.round(Number(amount) * cfg.percent / 100), claimed: true, percent: cfg.percent };
+    return { bonus: _bonusWithCap(amount, cfg.percent, cfg), claimed: true, percent: cfg.percent };
   } catch (e) {
     logger.warn(`[first-charge-bonus] claim falló: ${e.message}`);
     return { bonus: 0, claimed: false };
@@ -1607,7 +1628,7 @@ async function buildRolloverVars() {
   try { const g = await getGlobalBonusRollover(); x = g.enabled ? g.effective : 0; } catch (_) {}
   const rollover = 'x' + x;
   const rollover_txt = x > 0
-    ? `🎯 Este bono tiene ROLLOVER ${rollover}: para poder retirarlo tenés que apostar ${x} veces su valor (con slots y ruleta).`
+    ? `🎯 Este bono tiene ROLLOVER ${rollover}: para poder retirarlo tenés que apostar ${x} veces su valor (cualquier juego: slots, casino en vivo o deportes).`
     : '✅ Este bono no tiene rollover: podés retirarlo cuando quieras.';
   return { rollover, rollover_txt, x };
 }
@@ -2672,11 +2693,11 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
       const _rouHgD = await claimDailyRoulettePercent(user.id, 'auto-hgcash');
       if (_rouHgD.claimed) { _rouHg = _rouHgD; _rouHgKind = 'daily'; }
     }
-    const _rouHgBonus = _rouHg.claimed ? Math.round(Number(amount) * _rouHg.pct / 100) : 0;
+    const _rouHgBonus = _rouHg.claimed ? await computeAutoBonus(amount, _rouHg.pct) : 0; // #285 tope del 100%
     const _fcbHg = (_dupBank || _rouHg.claimed) ? { bonus: 0, claimed: false } : await claimFirstChargeBonus(user, Number(amount));
     // #263 BONO DE LOTE AUTOMÁTICO: si no hubo ruleta ni 1ª carga (ni multicuenta).
     const _loteHg = (_dupBank || _rouHg.claimed || _fcbHg.claimed) ? { pct: 0, claimed: false } : await claimAutoPromoPercent(user, 'auto-hgcash');
-    const _loteHgBonus = _loteHg.claimed ? Math.round(Number(amount) * _loteHg.pct / 100) : 0;
+    const _loteHgBonus = _loteHg.claimed ? await computeAutoBonus(amount, _loteHg.pct) : 0; // #285
     const _hgBonus = _rouHgBonus > 0 ? _rouHgBonus : (_fcbHg.bonus || _loteHgBonus || 0);
     const result = await girox.depositToUser(
       user.username, Number(amount), 'Carga automática (hgcash)', _ref,
@@ -8902,9 +8923,9 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
         if (_lc.claimed) { _loteClaim = _lc; _lotePct = _lc.pct; }
       }
     }
-    const _autoBonus = _roulPct > 0 ? Math.round(parseFloat(amount) * _roulPct / 100)
+    const _autoBonus = _roulPct > 0 ? await computeAutoBonus(amount, _roulPct) // #285 tope del 100%
       : _fcbBonus > 0 ? _fcbBonus
-      : _lotePct > 0 ? Math.round(parseFloat(amount) * _lotePct / 100) : 0;
+      : _lotePct > 0 ? await computeAutoBonus(amount, _lotePct) : 0;
     const _effectiveBonus = _autoBonus > 0 ? _autoBonus : parseFloat(bonus);
 
     const bonusRequested = _effectiveBonus > 0;
@@ -12004,8 +12025,14 @@ app.post('/api/admin/first-charge-bonus', authMiddleware, adminMiddleware, async
     const enabled = req.body && req.body.enabled === true;
     const percent = Math.max(0, Math.min(500, Math.round(Number(req.body && req.body.percent) || 0)));
     if (enabled && percent <= 0) return res.status(400).json({ error: 'El % debe ser mayor a 0.' });
-    await Config.set('firstChargeBonus', { enabled, percent }, req.user.username);
-    res.json({ success: true, enabled, percent });
+    // #285 tope del 100%
+    const prev = await getFirstChargeBonusConfig();
+    const b = req.body || {};
+    const capEnabled = b.capEnabled === undefined ? prev.capEnabled : b.capEnabled !== false;
+    const capArs = b.capArs === undefined ? prev.capArs : Math.max(0, Math.round(Number(b.capArs) || 0));
+    const restPct = b.restPct === undefined ? prev.restPct : Math.max(0, Math.min(100, Math.round(Number(b.restPct) || 0)));
+    await Config.set('firstChargeBonus', { enabled, percent, capEnabled, capArs, restPct }, req.user.username);
+    res.json({ success: true, enabled, percent, capEnabled, capArs, restPct });
   } catch (e) {
     logger.warn(`[first-charge-bonus] guardar config falló: ${e.message}`);
     res.status(500).json({ error: 'Error del servidor' });
@@ -12146,15 +12173,26 @@ app.post('/api/admin/instant-cashback', authMiddleware, adminMiddleware, async (
 });
 
 // STATUS del cliente: ¿puede girar? ¿ya giró? (NO revela los premios de más).
+// #285 (owner 2026-09-18): la ruleta de bienvenida NO es para cuentas creadas
+// por un agente desde el panel (alta manual): solo para las que se registró el
+// propio cliente (app / landing). Señales: createdByAgent o acquisitionSource='manual'.
+function _welcomeRouletteEligible(u) {
+  if (!u) return false;
+  return !(u.createdByAgent === true || u.acquisitionSource === 'manual');
+}
+const WR_MANUAL_MSG = 'La ruleta de bienvenida es solo para cuentas registradas por el propio cliente.';
+
 app.get('/api/welcome-roulette/status', authMiddleware, async (req, res) => {
   try {
     const cfg = await getWelcomeRouletteConfig();
     const user = await User.findOne({ id: req.user.userId })
-      .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt').lean();
+      .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt createdByAgent acquisitionSource').lean();
     const already = user && user.welcomeRouletteStatus && user.welcomeRouletteStatus !== 'none';
+    const eligible = _welcomeRouletteEligible(user);
     res.json({
       enabled: cfg.enabled === true,
-      canSpin: cfg.enabled === true && !already,
+      canSpin: cfg.enabled === true && !already && eligible,
+      ineligible: (!eligible && !already) ? 'manual' : null,
       alreadySpun: !!already,
       prizeLabel: (user && user.welcomeRoulettePrizeLabel) || null,
       // Premio completo para que el cliente pueda VOLVER a verlo (owner 2026-08-28).
@@ -12208,8 +12246,9 @@ app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, 
     if (!prize) return res.status(500).json({ error: 'No hay premios configurados.' });
 
     // Reserva atómica: solo gana quien pasa de 'none' → congela el premio.
+    // #285: cuentas creadas por un agente no giran (el filtro va en la reserva).
     const user = await User.findOneAndUpdate(
-      { id: req.user.userId, role: 'user', welcomeRouletteStatus: 'none' },
+      { id: req.user.userId, role: 'user', welcomeRouletteStatus: 'none', createdByAgent: { $ne: true }, acquisitionSource: { $ne: 'manual' } },
       { $set: {
         welcomeRouletteStatus: 'pending',
         welcomeRoulettePrizeType: prize.type,
@@ -12222,6 +12261,10 @@ app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, 
     ).select('id username').lean();
 
     if (!user) {
+      const _chk = await User.findOne({ id: req.user.userId }).select('createdByAgent acquisitionSource welcomeRouletteStatus').lean();
+      if (_chk && !_welcomeRouletteEligible(_chk) && (!_chk.welcomeRouletteStatus || _chk.welcomeRouletteStatus === 'none')) {
+        return res.status(400).json({ error: WR_MANUAL_MSG, code: 'MANUAL_SIGNUP' });
+      }
       return res.status(400).json({ error: 'Ya giraste tu ruleta de bienvenida. Es una sola vez.', code: 'ALREADY_SPUN' });
     }
 
@@ -12593,11 +12636,13 @@ app.get('/api/rewards/summary', authMiddleware, async (req, res) => {
     try {
       const wCfg = await getWelcomeRouletteConfig();
       const u = await User.findOne({ id: userId })
-        .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt dailyRoulettePendingPct dailyRoulettePendingLabel').lean();
+        .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt dailyRoulettePendingPct dailyRoulettePendingLabel createdByAgent acquisitionSource').lean();
       const already = u && u.welcomeRouletteStatus && u.welcomeRouletteStatus !== 'none';
+      const _wEligible = _welcomeRouletteEligible(u); // #285
       out.welcome = {
+        ineligible: (!_wEligible && !already) ? 'manual' : null,
         enabled: wCfg.enabled === true,
-        canSpin: wCfg.enabled === true && !already,
+        canSpin: wCfg.enabled === true && !already && _wEligible,
         segments: wCfg.prizes.map(p => ({ label: p.label })),
         prize: already ? {
           label: u.welcomeRoulettePrizeLabel, type: u.welcomeRoulettePrizeType,
@@ -12635,6 +12680,17 @@ app.get('/api/rewards/summary', authMiddleware, async (req, res) => {
         pendingLabel: (u && u.dailyRoulettePendingLabel) || null
       };
     } catch (e) { logger.warn(`[rewards] resumen ruletas falló: ${e.message}`); }
+
+    // #285: reglas de bono para el bloque "INFORMACIÓN" del hub.
+    try {
+      const fcb = await getFirstChargeBonusConfig();
+      const gr = await getGlobalBonusRollover();
+      out.bonusRules = {
+        firstChargeEnabled: fcb.enabled, firstChargePct: fcb.percent,
+        capEnabled: fcb.capEnabled, capArs: fcb.capArs, restPct: fcb.restPct,
+        rolloverX: gr.enabled ? gr.effective : null
+      };
+    } catch (_) {}
 
     // Cashback (solo si cargó en los últimos 7 días — si no, ni gastar la request)
     try {

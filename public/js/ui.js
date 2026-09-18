@@ -2589,6 +2589,24 @@ VIP.ui._refreshRewards = function() {
   }).catch(function() {});
 };
 
+// #285: bloque "🎁 BONOS" del recuadro INFORMACIÓN — reglas reales del panel.
+function _rwBonusRulesHtml(br, li) {
+  if (!br) return '';
+  var out = '<div style="font-size:11px;font-weight:900;color:#26e07f;letter-spacing:0.5px;margin:12px 0 6px;">🎁 CÓMO FUNCIONAN LOS BONOS</div>';
+  if (br.firstChargeEnabled && br.firstChargePct > 0) {
+    out += li('💳', 'En tu <b style="color:#fff;">PRIMERA carga</b> te sumamos un <b style="color:#26e07f;">' + br.firstChargePct + '% EXTRA</b>, automático.');
+  }
+  if (br.capEnabled && br.capArs > 0) {
+    var ej = 20000, b1 = Math.min(ej, br.capArs), b2 = Math.max(0, ej - br.capArs) * (br.restPct || 0) / 100;
+    out += li('📏', 'Los bonos del <b style="color:#fff;">100%</b> aplican hasta <b style="color:#fff;">' + _rwFmt(br.capArs) + '</b> de la carga; sobre lo que cargues de más va un <b style="color:#fff;">' + (br.restPct || 0) + '%</b>. ' +
+      'Ej.: cargás ' + _rwFmt(ej) + ' → ' + _rwFmt(b1) + ' + ' + _rwFmt(Math.round(b2)) + ' = <b style="color:#26e07f;">' + _rwFmt(Math.round(b1 + b2)) + ' de bono</b>.');
+  }
+  if (br.rolloverX != null) {
+    out += li('🎯', 'Todos los bonos (primera carga, ruletas, reembolso, regalos) tienen <b style="color:#ffd700;">ROLLOVER x' + br.rolloverX + '</b>' + (br.rolloverX > 0 ? ': se juegan al instante y se retiran después de apostar ' + br.rolloverX + ' veces su valor.' : ' (sin rollover).'));
+  }
+  out += li('🎡', 'La <b style="color:#fff;">ruleta de bienvenida</b> es solo para cuentas que se registraron desde la app o la landing (no para cuentas creadas por un agente).');
+  return out;
+}
 function _rwFmt(n) { try { return '$' + Number(n || 0).toLocaleString('es-AR'); } catch (e) { return '$' + n; } }
 function _rwCountdown(iso) {
   try {
@@ -2639,7 +2657,9 @@ VIP.ui.openRewardsHub = function() {
   {
     let body = '', cta = '';
     const wPending = w.prize && w.prize.type === 'percent' && w.prize.status === 'pending';
-    if (w.canSpin) {
+    if (w.ineligible === 'manual') {
+      // #285: cuenta creada por un agente → sin ruleta de bienvenida (sin tarjeta).
+    } else if (w.canSpin) {
       body = '<div style="font-size:13px;color:#cfd6de;line-height:1.4;">Tenés <b style="color:#ffd700;">1 giro GRATIS</b> de bienvenida. Se gira una sola vez. ¡Suerte!</div>';
       cta = _rwCta('🎡 GIRAR AHORA', "VIP.ui._rwSpinWelcome()", true);
     } else if (wPending) {
@@ -2759,8 +2779,9 @@ VIP.ui.openRewardsHub = function() {
         (iRoll > 0
           ? 'Acá es <b style="color:#ffd700;">x' + iRoll + '</b>: reclamás $1.000 → apostás $' + (1000 * iRoll).toLocaleString('es-AR') + ' y lo retirás sin problema.'
           : 'Ej.: <b style="color:#ffd700;">x2</b> = reclamás $1.000 → apostás $2.000 y lo retirás sin problema.')) +
-      li('🎰', 'El rollover se completa jugando <b style="color:#26e07f;">SLOTS y RULETA</b> — las apuestas en <b style="color:#ff8a80;">DEPORTES NO suman</b>.') +
+      li('🎰', 'El rollover se completa con <b style="color:#26e07f;">cualquier apuesta</b>: slots, casino en vivo y también <b style="color:#26e07f;">deportes</b>.') +
       li('💡', 'Mientras completás el rollover, la plata está en tu saldo y jugás normal. Solo afecta el momento de retirar.') +
+      _rwBonusRulesHtml(d.bonusRules, li) +
     '</div>';
   }
 

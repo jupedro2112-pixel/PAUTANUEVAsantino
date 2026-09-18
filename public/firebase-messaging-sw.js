@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v162'; // v162: cartel ¡Carga acreditada! muestra el bono y su ROLLOVER
+const CACHE_VERSION = 'v163'; // v163: info del hub — bonos con tope del 100%, rollover cuenta deportes, ruleta bienvenida solo auto-registro
+// v162: // v162: cartel ¡Carga acreditada! muestra el bono y su ROLLOVER
 // v161: // v161: sonido de mensaje nuevo (AudioContext desbloqueado con el primer gesto) + scroll instantáneo al último mensaje (sin smooth que se quedaba corto)
 // v160: // v160: campana 🔔 ACTIVAR NOTIFICACIONES en la guía de instalación (1 toque → cartel Permitir; bloqueadas → cómo desbloquear)
 // v159: botón 📣 Comunidad SIEMPRE visible en el widget del casino (href /go/comunidad; antes dependía del fetch de la config y en iPhone a veces no aparecía)

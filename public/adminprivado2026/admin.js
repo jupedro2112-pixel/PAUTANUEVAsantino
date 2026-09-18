@@ -6568,7 +6568,23 @@ async function loadFirstChargeBonus() {
         const pc = document.getElementById('fcbPercent');
         if (en) en.checked = cfg.enabled === true;
         if (pc) pc.value = cfg.percent || 100;
+        // #285 tope del 100%
+        const ce = document.getElementById('fcbCapEnabled'), ca = document.getElementById('fcbCapArs'), rp = document.getElementById('fcbRestPct');
+        if (ce) ce.checked = cfg.capEnabled !== false;
+        if (ca) ca.value = cfg.capArs != null ? cfg.capArs : 5000;
+        if (rp) rp.value = cfg.restPct != null ? cfg.restPct : 20;
+        _fcbCapHint();
+        ['fcbCapEnabled', 'fcbCapArs', 'fcbRestPct'].forEach(function(id) { const el = document.getElementById(id); if (el && !el._hintBound) { el._hintBound = true; el.addEventListener('input', _fcbCapHint); el.addEventListener('change', _fcbCapHint); } });
     } catch (e) { if (form) form.style.display = 'none'; if (header) header.style.display = 'none'; }
+}
+function _fcbCapHint() {
+    const h = document.getElementById('fcbCapHint'); if (!h) return;
+    const on = document.getElementById('fcbCapEnabled').checked;
+    const cap = Number(document.getElementById('fcbCapArs').value) || 0;
+    const rest = Number(document.getElementById('fcbRestPct').value) || 0;
+    if (!on || cap <= 0) { h.textContent = 'Sin tope: un bono del 100% duplica toda la carga.'; return; }
+    const ej = 20000, b1 = Math.min(ej, cap), b2 = Math.round(Math.max(0, ej - cap) * rest / 100);
+    h.textContent = 'Aplica a TODO bono automático del 100% (1ª carga, ruleta, lote). Ej.: carga $' + ej.toLocaleString('es-AR') + ' → $' + b1.toLocaleString('es-AR') + ' (100% hasta $' + cap.toLocaleString('es-AR') + ') + $' + b2.toLocaleString('es-AR') + ' (' + rest + '% del resto) = $' + (b1 + b2).toLocaleString('es-AR') + ' de bono.';
 }
 async function saveFirstChargeBonus() {
     const enabled = document.getElementById('fcbEnabled').checked;
@@ -6576,7 +6592,12 @@ async function saveFirstChargeBonus() {
     if (enabled && percent <= 0) { showToast('Poné un % mayor a 0', 'error'); return; }
     try {
         const r = await authFetch('/api/admin/first-charge-bonus', {
-            method: 'POST', body: JSON.stringify({ enabled: enabled, percent: percent })
+            method: 'POST', body: JSON.stringify({
+                enabled: enabled, percent: percent,
+                capEnabled: document.getElementById('fcbCapEnabled').checked,
+                capArs: Number(document.getElementById('fcbCapArs').value) || 0,
+                restPct: Number(document.getElementById('fcbRestPct').value) || 0
+            })
         });
         const j = await r.json();
         if (!r.ok) { showToast(j.error || 'No se pudo guardar', 'error'); return; }
