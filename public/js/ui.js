@@ -2667,6 +2667,11 @@ VIP.ui.openRewardsHub = function() {
       body = '<div style="font-size:13px;color:#cfd6de;">Tu premio: <b style="color:#ffd700;font-size:16px;">' + _wrEsc(p.label || '') + '</b><br>' +
         '<span style="font-size:12px;">⏳ ' + _wrEsc(String(p.value)) + '% EXTRA pendiente — se suma en tu próxima carga</span></div>';
       cta = _rwCta('💳 Cargar y usarlo', "VIP.ui.closeRewardsHub();VIP.ui.casinoBotGo('deposit')", true);
+    } else if (w.prize && w.prize.status === 'used' && w.prize.usedBy === 'bono 1ª carga') {
+      // #286: no giró, pero cobró el 100% de primera carga → es el mismo regalo.
+      body = '<div style="font-size:13px;color:#cfd6de;line-height:1.45;">Tu bono de bienvenida (<b style="color:#ffd700;">' + _wrEsc(w.prize.label || '100%') + '</b>) ' +
+        '<b style="color:#26e07f;">ya se aplicó en tu primera carga</b> 🎉. Es un solo regalo de bienvenida por cuenta, por eso la ruleta queda usada.</div>';
+      cta = _rwCta('✅ Bono de bienvenida usado', '', false);
     } else if (!w.prize && !w.enabled) {
       body = '<div style="font-size:13px;color:#9aa4b0;">Un giro gratis al crear tu cuenta. 🔒 Disponible muy pronto.</div>';
       cta = _rwCta('🔒 Muy pronto', '', false);

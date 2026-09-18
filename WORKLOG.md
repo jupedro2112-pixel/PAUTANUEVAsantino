@@ -8,6 +8,21 @@
 
 ## Sesión 2026-09-18
 
+### 286. Sin DOBLE 100 %: cobrar el 100 % de primera carga deja la ruleta de bienvenida USADA
+- **Caso owner:** viene de publicidad (tiene el 100 % de 1ª carga activo), carga sin girar
+  → cobra el 100 %; después gira la ruleta y saca "100 % EXTRA" → otro 100 %.
+- **Fix:** en `claimFirstChargeBonus`, al reservar el bono se marca la ruleta de
+  bienvenida (solo si estaba en `none`) como `used` con premio `percent` = el % del bono,
+  label "100% de primera carga", `usedBy:'bono 1ª carga'`. `revertFirstChargeBonus`
+  (carga fallida) la devuelve a `none` solo si la marcó este bono. El sentido inverso ya
+  estaba cubierto: si giró antes, la ruleta tiene prioridad y el bono de 1ª carga no se
+  reclama (`_roulPct === 0`).
+- **PWA (hub):** tarjeta "Tu bono de bienvenida (100 %) ya se aplicó en tu primera carga
+  🎉 — es un solo regalo por cuenta" (status/summary exponen `prize.usedBy`).
+  **Panel:** banner gris "BIENVENIDA: cobró el 100 % de primera carga — ruleta USADA (es
+  el mismo regalo) · no le corresponde otro 100 % ni giro". SW → v164, admin-sw → v56.
+- **Validado:** `node --check` OK. Back + front necesitan deploy.
+
 ### 285. Ruleta de bienvenida solo para auto-registro + TOPE del bono 100% ($5.000 + 20% del resto) + rollover cuenta DEPORTES
 - **Pedido owner (3 cosas):**
   1. **Cliente registrado "manualmente" (alta por un agente desde el panel) NO recibe la

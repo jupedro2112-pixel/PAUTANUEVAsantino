@@ -743,6 +743,22 @@ async function claimFirstChargeBonus(user, amount) {
       { new: false }
     ).lean();
     if (!claimed) return { bonus: 0, claimed: false };
+    // #286 (owner 2026-09-18): el 100% de 1ª carga y el 100% de la ruleta de
+    // bienvenida son el MISMO regalo. Si cobra el de 1ª carga sin haber girado,
+    // la ruleta queda marcada como USADA con el 100% → no puede girar después y
+    // cobrar otro 100%. (Si giró antes, la ruleta tiene prioridad y este bono ni
+    // se reclama: `_roulPct === 0` en los callers.)
+    try {
+      const _now = new Date();
+      await User.updateOne(
+        { id: user.id, welcomeRouletteStatus: { $in: [null, 'none'] } },
+        { $set: {
+          welcomeRouletteStatus: 'used', welcomeRoulettePrizeType: 'percent', welcomeRoulettePrizeValue: cfg.percent,
+          welcomeRoulettePrizeLabel: `${cfg.percent}% de primera carga`, welcomeRouletteRolloverX: 0,
+          welcomeRouletteSpunAt: _now, welcomeRouletteUsedAt: _now, welcomeRouletteUsedBy: 'bono 1ª carga'
+        } }
+      );
+    } catch (_) {}
     return { bonus: _bonusWithCap(amount, cfg.percent, cfg), claimed: true, percent: cfg.percent };
   } catch (e) {
     logger.warn(`[first-charge-bonus] claim falló: ${e.message}`);
@@ -753,6 +769,12 @@ async function claimFirstChargeBonus(user, amount) {
 async function revertFirstChargeBonus(userId) {
   try {
     await User.updateOne({ id: userId, firstChargeBonusDone: true }, { $set: { firstChargeBonusDone: false } });
+    // #286: si la carga falló, la ruleta vuelve a estar disponible (solo si la
+    // marcó ESTE bono, no un giro real).
+    await User.updateOne(
+      { id: userId, welcomeRouletteStatus: 'used', welcomeRouletteUsedBy: 'bono 1ª carga' },
+      { $set: { welcomeRouletteStatus: 'none', welcomeRoulettePrizeType: null, welcomeRoulettePrizeValue: null, welcomeRoulettePrizeLabel: null, welcomeRouletteSpunAt: null, welcomeRouletteUsedAt: null, welcomeRouletteUsedBy: null } }
+    );
   } catch (_) {}
 }
 
@@ -12186,7 +12208,7 @@ app.get('/api/welcome-roulette/status', authMiddleware, async (req, res) => {
   try {
     const cfg = await getWelcomeRouletteConfig();
     const user = await User.findOne({ id: req.user.userId })
-      .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt createdByAgent acquisitionSource').lean();
+      .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt welcomeRouletteUsedBy createdByAgent acquisitionSource').lean();
     const already = user && user.welcomeRouletteStatus && user.welcomeRouletteStatus !== 'none';
     const eligible = _welcomeRouletteEligible(user);
     res.json({
@@ -12200,7 +12222,8 @@ app.get('/api/welcome-roulette/status', authMiddleware, async (req, res) => {
         label: user.welcomeRoulettePrizeLabel, type: user.welcomeRoulettePrizeType,
         value: user.welcomeRoulettePrizeValue, status: user.welcomeRouletteStatus,
         rolloverX: user.welcomeRouletteRolloverX || 0,
-        spunAt: user.welcomeRouletteSpunAt, usedAt: user.welcomeRouletteUsedAt
+        spunAt: user.welcomeRouletteSpunAt, usedAt: user.welcomeRouletteUsedAt,
+        usedBy: user.welcomeRouletteUsedBy || null // #286
       } : null,
       // Etiquetas de los segmentos para dibujar la ruleta (sin pesos).
       segments: cfg.prizes.map(p => ({ label: p.label }))
@@ -12636,7 +12659,7 @@ app.get('/api/rewards/summary', authMiddleware, async (req, res) => {
     try {
       const wCfg = await getWelcomeRouletteConfig();
       const u = await User.findOne({ id: userId })
-        .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt dailyRoulettePendingPct dailyRoulettePendingLabel createdByAgent acquisitionSource').lean();
+        .select('welcomeRouletteStatus welcomeRoulettePrizeLabel welcomeRoulettePrizeType welcomeRoulettePrizeValue welcomeRouletteRolloverX welcomeRouletteSpunAt welcomeRouletteUsedAt welcomeRouletteUsedBy dailyRoulettePendingPct dailyRoulettePendingLabel createdByAgent acquisitionSource').lean();
       const already = u && u.welcomeRouletteStatus && u.welcomeRouletteStatus !== 'none';
       const _wEligible = _welcomeRouletteEligible(u); // #285
       out.welcome = {
@@ -12647,7 +12670,8 @@ app.get('/api/rewards/summary', authMiddleware, async (req, res) => {
         prize: already ? {
           label: u.welcomeRoulettePrizeLabel, type: u.welcomeRoulettePrizeType,
           value: u.welcomeRoulettePrizeValue, status: u.welcomeRouletteStatus,
-          rolloverX: u.welcomeRouletteRolloverX || 0, spunAt: u.welcomeRouletteSpunAt, usedAt: u.welcomeRouletteUsedAt
+          rolloverX: u.welcomeRouletteRolloverX || 0, spunAt: u.welcomeRouletteSpunAt, usedAt: u.welcomeRouletteUsedAt,
+          usedBy: u.welcomeRouletteUsedBy || null // #286
         } : null
       };
 

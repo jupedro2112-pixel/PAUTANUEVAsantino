@@ -11541,6 +11541,11 @@ async function loadChatRouletteBanner(userId) {
             sub = 'Carga automática o carga SIN bonus → se aplica solo y queda usado. Si cargás bonus a mano → se usa el tuyo y se marca usado.' + (p.spunAt ? ' · giró el ' + fmt(p.spunAt) : '');
             bg = 'linear-gradient(90deg,#b8860b,#8a6508)';
             btn = '<button onclick="markChatRouletteUsed(\'' + escapeHtml(String(userId)) + '\')" style="background:#fff;color:#7a5a08;border:none;border-radius:7px;padding:6px 11px;font-weight:800;font-size:11.5px;cursor:pointer;">✓ Marcar usado</button>';
+        } else if (p.usedBy === 'bono 1ª carga') {
+            // #286: no giró — cobró el 100% de 1ª carga y la ruleta quedó usada (mismo regalo).
+            titulo = 'BIENVENIDA: cobró el ' + escapeHtml(p.label || '100% de primera carga') + ' — ruleta USADA (es el mismo regalo)';
+            sub = (p.usedAt ? 'aplicado el ' + fmt(p.usedAt) : '') + ' · no le corresponde otro 100% ni giro';
+            bg = 'rgba(120,120,120,0.25)';
         } else {
             titulo = 'RULETA: ganó ' + escapeHtml(p.label || (p.value + '%')) + ' — ya USADO';
             sub = (p.usedAt ? 'aplicado el ' + fmt(p.usedAt) : '') + (p.usedBy ? ' por ' + escapeHtml(p.usedBy) : '');
