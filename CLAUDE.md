@@ -100,6 +100,9 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   comisiones de referidos sin comerse el límite de 60 req/min.
 - **Reembolsos por RANGO** (Bronce 3% / Plata 6% / Oro 10%), según lo perdido EN EL
   PERÍODO que se reclama — no un acumulado. Ver `src/utils/refundTiers.js`.
+  **Diario/semanal/mensual se descuentan entre sí (#297):** el diario paga lo de AYER
+  día por día; el semanal y el mensual restan la BASE ya reembolsada
+  (`RefundClaim.netAmount` = base efectivamente reembolsada, no la pérdida bruta).
 - **Regalos = BONO de 1girox (#266, 2026-09-07).** Ruleta (bienvenida/diaria),
   reembolsos, cashback, fueguito, rakeback, nivel VIP y comisiones de referidos van por
   `girox.creditGift()` → `POST /players/{u}/bonus` con el rollover del flujo (figuran

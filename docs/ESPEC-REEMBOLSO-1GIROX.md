@@ -136,13 +136,34 @@ la fuente local es obligatoria (no alcanza con el dato oficial) y se toma el má
 7. Tope por día por jugador; mínimo para cobrar; rollover del bono: todo configurable
    desde el panel.
 
-## 5. Reembolso por PERÍODO (semanal / mensual), si el proyecto lo tiene
+## 5. Reembolso por PERÍODO (diario / semanal / mensual)
 Misma idea, más simple: no hay acumulado, la base es el período.
 ```
 pérdidaPeríodo = max(0, netwin_casino(período) − bonus.granted(período))
 reembolso      = % por rango (ej. Bronce 3% / Plata 6% / Oro 10%) según pérdidaPeríodo
                  − lo ya cobrado en cashback instantáneo dentro de ese período
 ```
+### 5.1 Tres períodos que se descuentan entre sí (decisión owner 2026-09-24)
+Cada pérdida se reembolsa UNA sola vez, sin importar por qué vía:
+```
+DIARIO   base = pérdida de AYER (día cerrado, hora ART), día por día, SIN mirar
+                días anteriores (una ganancia de anteayer no la come).
+SEMANAL  base = max(0, pérdidaNETA(semana pasada) − Σ base de los DIARIOS cobrados
+                de esa semana)          → reclamó todos los días = $0
+                                        → se olvidó un día = ese día entra
+MENSUAL  base = max(0, pérdidaNETA(mes pasado) − Σ base DIARIOS del mes
+                − Σ base SEMANALES cuya semana arranca en el mes)
+%        = rango según la pérdida TOTAL del período (rango real del jugador),
+           aplicado sobre la base que queda.
+```
+- "Base" = la pérdida que efectivamente se reembolsó en cada reclamo (guardarla en
+  el claim, NO la pérdida bruta), así el período grande resta exactamente lo pagado.
+- Costo asumido: el diario no netea ganancias de otros días (gana 100k el jueves y
+  pierde 100k el viernes → cobra el viernes). El semanal y el mensual sí netean, por
+  eso el que cobra todos los diarios ve $0 ahí. Se eligió a propósito: el cliente que
+  perdió quiere el reembolso de ESA pérdida; el modelo compensado no lo entiende.
+- Semana que cruza de mes: el semanal cuenta para el mes donde ARRANCA la semana
+  (imprecisión aceptada).
 - Reserva atómica por `jugador + tipo + periodKey` (un reclamo por período).
 - `reference` derivada del **período** (`vip-rf-<periodKey>-<userId>`), NO del id del
   reclamo: si el reclamo se borra y se reintenta, la reference tiene que ser la misma.

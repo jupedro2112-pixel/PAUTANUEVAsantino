@@ -39,8 +39,8 @@ El sistema VIPCARGAS:
 - Gestiona **cargas** (manuales por agente, o AUTOMÁTICAS vía banco hgcash + IA de
   comprobantes) y **retiros** (self-service con confirmación de agente y pago
   automático por hgcash).
-- Da **reembolsos** sobre la pérdida real/NETWIN (semanal/mensual — el diario se
-  eliminó el 2026-08-07), **ruleta
+- Da **reembolsos** sobre la pérdida real/NETWIN (diario/semanal/mensual — el diario
+  volvió el 2026-09-24, #297), **ruleta
   diaria**, **fueguito** (racha), **bono instalación $5.000**, **referidos** (8% de
   netwin → owner-revenue, y 7% de eso al referidor) y **campañas/publicistas** con
   sub-atribución por influencer.
@@ -712,19 +712,23 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   devolver; si se descontó → devolución (split bonus/fichas para pagos legacy).
   `pay-other-bank` = pago manual (descuenta igual). Poller `_pollPayingPayouts` cada
   45s (últimas 2h) cubre webhooks perdidos.
-- **Reembolsos**: `POST /api/refunds/claim/{weekly|monthly}` — lock Redis,
-  ventanas de `models/refunds.js` (semanal: lunes/martes; mensual: desde día 7),
-  rangos en hora ART de `src/utils/periodRanges.js`, NETWIN real de
-  `girox.getPlayerStats(username, …)` (**sólo casino**, ver §4.6; por username, sin
-  gate de ID). El % sale del RANGO por pérdida del período
-  (`src/utils/refundTiers.js`). 🪦 **El reembolso DIARIO se ELIMINÓ el 2026-08-07**
-  (decisión del owner): `claim/daily` quedó como stub que responde "ya no está
-  disponible" (para PWAs cacheadas), el status manda un stub `daily` en $0 por la
-  misma razón, y los RefundClaim históricos `type:'daily'` siguen en la base (el
-  enum del modelo conserva 'daily' SOLO por esos docs). **Desde 2026-08-05 los
-  rangos son EDITABLES desde el panel y CADA PERÍODO tiene su propia escalera**
-  (semanal ≠ mensual): `Config['refundTiersByPeriod']`
-  (`{weekly/monthly: [{name,pct,max}]}` — una llave `daily` vieja se ignora),
+- **Reembolsos**: `POST /api/refunds/claim/{daily|weekly|monthly}` — lock Redis,
+  ventanas de `models/refunds.js` (diario: cualquier día, lo de AYER, un reclamo por
+  día reembolsado; semanal: lunes/martes; mensual: desde día 7), rangos en hora ART
+  de `src/utils/periodRanges.js`, NETWIN real de `girox.getPlayerStats(username, …)`
+  (**sólo casino**, ver §4.6; por username, sin gate de ID). El % sale del RANGO por
+  pérdida del período (`src/utils/refundTiers.js`). **Regla anti "reembolso de
+  reembolso" (#297, 2026-09-24):** el DIARIO paga la pérdida de ayer día por día sin
+  mirar lo previo; el SEMANAL toma la pérdida NETA de la semana y **descuenta la base
+  ya reembolsada por los diarios** (`_dailyRefundBaseBetween`); el MENSUAL descuenta
+  diarios + semanales del mes (`_weeklyRefundBaseInMonth`, semana = la que arranca en
+  el mes). `RefundClaim.netAmount` guarda la base EFECTIVAMENTE reembolsada en ese
+  reclamo (ya neta de lo previo); el % sale de la pérdida total del período y se
+  aplica sobre lo que queda. Interruptor `Config['refundDailyEnabled']` (default ON).
+  El diario se había eliminado el 2026-08-07 y volvió el 2026-09-24. **Desde
+  2026-08-05 los rangos son EDITABLES desde el panel y CADA PERÍODO tiene su propia
+  escalera**: `Config['refundTiersByPeriod']`
+  (`{daily/weekly/monthly: [{name,pct,max}]}`),
   leída SIN cache por `getRefundTiersByPeriod()` (server.js) con fallback a
   `DEFAULT_TIERS` (3/6/10%) por período si falta/es inválida. Validación en
   `refundTiers.normalizeTiers` (1-6 rangos, % 0-100, umbrales crecientes, último

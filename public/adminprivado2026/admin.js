@@ -5966,11 +5966,14 @@ async function toggleVipLevels() {
 // 🪦 Acá vivían loadRefundPercents/saveRefundPercents (% fijos por período, sin
 // uso desde #99): REEMPLAZADAS el 2026-08-05 por este editor de rangos por
 // pérdida, con escalera PROPIA por período (semanal/mensual distintas).
-// 🪦 El período DIARIO se eliminó el 2026-08-07 (junto con el reembolso diario).
+// #297 (2026-09-24): vuelve el DIARIO (lo de ayer, día por día; el semanal y
+// el mensual descuentan la base ya reembolsada → nunca se paga dos veces).
 const REFUND_TIER_PERIODS = [
+    { key: 'daily', label: '☀️ Diario' },
     { key: 'weekly', label: '📆 Semanal' },
     { key: 'monthly', label: '🗓️ Mensual' }
 ];
+let _refundDailyEnabled = true;
 let _refundTiersMaxRows = 6;
 
 function _refundTierRowHtml(t) {
@@ -5988,9 +5991,10 @@ function _refundTierRowHtml(t) {
     </div>`;
 }
 
-function renderRefundTiersEditor(tiersByPeriod, minimums) {
+function renderRefundTiersEditor(tiersByPeriod, minimums, dailyEnabled) {
     const cont = document.getElementById('refundTiersEditors');
     if (!cont) return;
+    if (typeof dailyEnabled === 'boolean') _refundDailyEnabled = dailyEnabled;
     const mins = minimums || {};
     const minVal = (k, def) => (mins[k] != null && Number.isFinite(Number(mins[k])) ? Number(mins[k]) : def);
     // Mínimos para COBRAR (owner 2026-08-10): si el reembolso calculado del
@@ -6000,13 +6004,22 @@ function renderRefundTiersEditor(tiersByPeriod, minimums) {
         <div style="font-weight:bold;font-size:13px;margin-bottom:6px;">💵 Mínimo para cobrar</div>
         <div style="color:#aaa;font-size:11px;margin-bottom:8px;">Si el reembolso calculado del período da MENOS que esto, el cliente no puede reclamarlo (le sale el aviso con el monto). 0 = sin mínimo.</div>
         <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;">☀️ Diario: $
+                <input type="number" id="refundMinDaily" value="${minVal('daily', 500)}" min="0" step="1" style="width:100px;"></label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;">📆 Semanal: $
                 <input type="number" id="refundMinWeekly" value="${minVal('weekly', 1500)}" min="0" step="1" style="width:100px;"></label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;">🗓️ Mensual: $
                 <input type="number" id="refundMinMonthly" value="${minVal('monthly', 5000)}" min="0" step="1" style="width:100px;"></label>
         </div>
     </div>`;
-    cont.innerHTML = minsHtml + REFUND_TIER_PERIODS.map((p) => {
+    // #297: interruptor del DIARIO + explicación de la regla anti "reembolso de reembolso".
+    const dailyHtml = `<div style="margin-bottom:14px;padding:10px;background:rgba(224,168,0,0.06);border:1px solid rgba(224,168,0,0.35);border-radius:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:bold;cursor:pointer;">
+            <input type="checkbox" id="refundDailyEnabled" ${_refundDailyEnabled ? 'checked' : ''} style="accent-color:#e0a800;"> ☀️ Reembolso DIARIO activo (lo que perdió AYER, día por día)
+        </label>
+        <div style="color:#aaa;font-size:11px;margin-top:6px;line-height:1.5;">Regla (owner 2026-09-24): el <b>diario</b> paga la pérdida de ayer sin mirar días anteriores. El <b>semanal</b> toma la pérdida NETA de la semana pasada (las ganancias netean) y <b>descuenta lo ya reembolsado por los diarios</b>: si reclamó todos los días → $0; si se olvidó un día → ese día entra. El <b>mensual</b> descuenta diarios + semanales del mes. El % sale de la pérdida total del período y se aplica sobre lo que queda.</div>
+    </div>`;
+    cont.innerHTML = dailyHtml + minsHtml + REFUND_TIER_PERIODS.map((p) => {
         const tiers = (tiersByPeriod && tiersByPeriod[p.key]) || [];
         return `<div style="margin-bottom:14px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;">
             <div style="font-weight:bold;font-size:13px;margin-bottom:8px;">${p.label}</div>
@@ -6061,7 +6074,7 @@ async function loadRefundTiers() {
         if (header) header.style.display = '';
         const j = await r.json();
         if (j.maxTiers) _refundTiersMaxRows = j.maxTiers;
-        renderRefundTiersEditor(j.tiersByPeriod || {}, j.minimums);
+        renderRefundTiersEditor(j.tiersByPeriod || {}, j.minimums, j.dailyEnabled);
     } catch (e) {
         console.error('Error cargando rangos de reembolso:', e);
     }
@@ -6069,16 +6082,19 @@ async function loadRefundTiers() {
 
 async function saveRefundTiers() {
     const msg = document.getElementById('refundTiersMsg');
+    const minDaily = Number(document.getElementById('refundMinDaily')?.value);
     const minWeekly = Number(document.getElementById('refundMinWeekly')?.value);
     const minMonthly = Number(document.getElementById('refundMinMonthly')?.value);
-    if (!Number.isFinite(minWeekly) || minWeekly < 0 || !Number.isFinite(minMonthly) || minMonthly < 0) {
+    if (!Number.isFinite(minDaily) || minDaily < 0 || !Number.isFinite(minWeekly) || minWeekly < 0 || !Number.isFinite(minMonthly) || minMonthly < 0) {
         showToast('Los mínimos para cobrar tienen que ser números de 0 en adelante (0 = sin mínimo)', 'error');
         return;
     }
     const body = {
+        daily: _collectRefundTiers('daily'),
         weekly: _collectRefundTiers('weekly'),
         monthly: _collectRefundTiers('monthly'),
-        minimums: { weekly: minWeekly, monthly: minMonthly }
+        minimums: { daily: minDaily, weekly: minWeekly, monthly: minMonthly },
+        dailyEnabled: !!(document.getElementById('refundDailyEnabled') || {}).checked
     };
     if (!confirm('¿Guardar los rangos y mínimos de reembolso? Se aplican AL INSTANTE a los reclamos nuevos y a lo que el cliente ve en su perfil.')) return;
     try {
@@ -6092,7 +6108,7 @@ async function saveRefundTiers() {
             showToast(j.error || 'No se pudo guardar', 'error');
             return;
         }
-        renderRefundTiersEditor(j.tiersByPeriod || {}, j.minimums);
+        renderRefundTiersEditor(j.tiersByPeriod || {}, j.minimums, j.dailyEnabled);
         const resumen = REFUND_TIER_PERIODS.map((p) => {
             const ts = (j.tiersByPeriod && j.tiersByPeriod[p.key]) || [];
             return `${p.label.split(' ')[1]}: ${ts.map((t) => `${t.pct}%`).join('/')}`;

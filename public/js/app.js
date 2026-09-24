@@ -383,7 +383,9 @@ function setupEventListeners() {
         const fileInput = document.getElementById('fileInput');
         if (fileInput) fileInput.addEventListener('change', VIP.chat.handleFileSelect);
 
-        // Refund buttons (el diario se eliminó 2026-08-07 — solo semanal y mensual)
+        // Refund buttons (#297: el diario volvió el 2026-09-24)
+        const dailyRefundBtn = document.getElementById('dailyRefundBtn');
+        if (dailyRefundBtn) dailyRefundBtn.addEventListener('click', () => VIP.refunds.showRefundModal('daily'));
         const weeklyRefundBtn = document.getElementById('weeklyRefundBtn');
         if (weeklyRefundBtn) weeklyRefundBtn.addEventListener('click', () => VIP.refunds.showRefundModal('weekly'));
         const monthlyRefundBtn = document.getElementById('monthlyRefundBtn');

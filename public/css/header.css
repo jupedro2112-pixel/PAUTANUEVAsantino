@@ -59,8 +59,11 @@
     text-align: center;
 }
 
-/* 🪦 .refund-btn.daily eliminado (2026-08-07): el reembolso diario se sacó
-   del producto — quedan semanal y mensual. */
+/* #297: vuelve el DIARIO (dorado, como el sol de "ayer"). */
+.refund-btn.daily {
+    background: linear-gradient(135deg, #e0a800 0%, #b8860b 100%);
+    color: #1a1200;
+}
 
 .refund-btn.weekly {
     background: linear-gradient(135deg, #9d4edd 0%, #6603a8 100%);

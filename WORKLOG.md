@@ -8,6 +8,45 @@
 
 ## Sesión 2026-09-24
 
+### 297. Reembolso DIARIO de vuelta + semanal/mensual descuentan lo ya reembolsado (anti "reembolso de reembolso")
+- Decisión del owner (charla del 2026-09-24, tras evaluar el modelo "compensado"):
+  **diario = la pérdida de AYER, día por día, sin mirar lo previo** (el cliente que
+  perdió quiere su reembolso de esa pérdida, y no entendería que una ganancia de
+  anteayer se la coma). **Semanal = pérdida NETA de la semana pasada** (las ganancias
+  netean) **menos la base ya reembolsada por los diarios de esa semana**: si reclamó
+  todos los días → $0; si se olvidó un día → ese día entra. **Mensual** = neto del mes
+  menos la base de diarios + semanales del mes (semana = la que arranca en el mes).
+  Cada pérdida se reembolsa UNA sola vez. Costo asumido: el diario no netea ganancias
+  de otros días (ej. gana 100k el jueves, pierde 100k el viernes → cobra el viernes).
+- Backend: `periodRanges.getYesterdayRangeArgentinaEpoch()` (+`nextDayIso`),
+  `refunds.canClaimDailyRefund(userId, dateStr)` (un reclamo por día reembolsado,
+  periodKey `daily:YYYY-MM-DD`), `POST /api/refunds/claim/daily` real (mismo esqueleto
+  que el semanal: lock, stats fresh, escalera `daily`, mínimo, reserva atómica, bono
+  con reference `vip-rf-daily-YYYY-MM-DD-userId`, Transaction, CAPI `refund_daily`).
+  Helpers `_dailyRefundBaseBetween(userId, from, to)` y
+  `_weeklyRefundBaseInMonth(userId, 'YYYY-MM')` suman `RefundClaim.netAmount`;
+  **desde ahora `netAmount` del semanal/mensual guarda la base efectivamente
+  reembolsada** (ya descontado lo previo), no la pérdida bruta. Status devuelve
+  `daily` real (`enabled`, `period`=ayer, mínimo) y en weekly/monthly
+  `alreadyRefunded` + `remaining`. El % sigue saliendo del rango de la pérdida TOTAL
+  del período (rango real) y se aplica sobre lo que queda. Cashback instantáneo se
+  descuenta por monto también en el diario (ayer).
+- Config: escalera `daily` en `refundTiersByPeriod` (default `DEFAULT_TIERS`), mínimo
+  `daily` en `refundMinimums` (default $500), interruptor `Config['refundDailyEnabled']`
+  (default ON; apagado → botón oculto en la PWA y claim rechazado). El POST de
+  `/api/admin/refund-tiers` acepta `daily`, `minimums.daily`, `dailyEnabled` (todos
+  opcionales → un panel cacheado viejo no pisa nada).
+- PWA (SW v177): botón **☀️ Diario** (dorado) en el dashboard y en el modal unificado
+  (ocultos si está apagado), modal con "lo que perdiste AYER", aviso verde "Ya
+  reembolsaste $X de esta pérdida… acá cobrás el % de lo que queda" en semanal/mensual,
+  estado "✅ Ya reembolsado" cuando no queda nada, perfil con bloque Diario + escalera
+  diaria. `app.js` enlaza el click del botón.
+- Panel (admin-sw v59): card "Rangos de reembolso" con interruptor del diario +
+  explicación de la regla, escalera ☀️ Diario y mínimo diario.
+- ⚠️ Pendiente owner: si el **cashback instantáneo** (hub PREMIOS) sigue encendido,
+  convive con el diario (se descuenta por monto); si quiere UNA sola cosa diaria,
+  apagar el cashback desde el panel.
+
 ### 296. "¿Cómo funciona?" abre y cierra
 - Owner: al volver a tocar el botón no se cerraba. Ahora es toggle (`VIP.ui._botState`:
   si ya está en `info`, vuelve al inicio) + botón "✕ Cerrar" al pie. SW → v176.

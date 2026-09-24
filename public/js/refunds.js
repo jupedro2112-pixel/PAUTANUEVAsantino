@@ -91,7 +91,14 @@ VIP.refunds = (function () {
 
     function updateRefundButtons() {
         if (!VIP.state.refundStatus) return;
-        // (El reembolso DIARIO se eliminó el 2026-08-07 — solo semanal y mensual.)
+        // #297: DIARIO de vuelta — se muestra solo si el panel lo tiene encendido.
+        const d = VIP.state.refundStatus.daily;
+        const dailyOn = !!(d && d.enabled);
+        const dBtn = document.getElementById('dailyRefundBtn');
+        if (dBtn) dBtn.style.display = dailyOn ? '' : 'none';
+        const uBtn = document.getElementById('unifiedDailyBtn');
+        if (uBtn) uBtn.style.display = dailyOn ? '' : 'none';
+        if (dailyOn) updateRefundButton('daily', d);
         updateRefundButton('weekly', VIP.state.refundStatus.weekly);
         updateRefundButton('monthly', VIP.state.refundStatus.monthly);
         updateRefundLabels();
@@ -106,12 +113,14 @@ VIP.refunds = (function () {
             const el = document.getElementById(id);
             if (el && s[t] && s[t].percentage != null) el.title = `${label} ${s[t].percentage}%`;
         };
+        tip('dailyRefundBtn', 'Reembolso Diario (lo de ayer)', 'daily');
         tip('weeklyRefundBtn', 'Reembolso Semanal (Lun-Mar)', 'weekly');
         tip('monthlyRefundBtn', 'Reembolso Mensual (Desde día 7)', 'monthly');
         const pctSpan = (id, t) => {
             const el = document.getElementById(id);
             if (el && s[t] && s[t].percentage != null) el.textContent = s[t].percentage;
         };
+        pctSpan('unifiedDailyPct', 'daily');
         pctSpan('unifiedWeeklyPct', 'weekly');
         pctSpan('unifiedMonthlyPct', 'monthly');
 
@@ -119,7 +128,7 @@ VIP.refunds = (function () {
         // en el HTML (los rangos se editan desde el panel) — acá se completa con
         // el % MÁXIMO real de las escaleras que mandó el backend.
         const ladders = s.tiersByPeriod
-            ? [s.tiersByPeriod.weekly, s.tiersByPeriod.monthly]
+            ? [s.tiersByPeriod.daily, s.tiersByPeriod.weekly, s.tiersByPeriod.monthly]
             : [s.tiers];
         let maxPct = 0;
         ladders.forEach((ts) => (ts || []).forEach((t) => { if (t && t.pct > maxPct) maxPct = t.pct; }));
@@ -137,8 +146,9 @@ VIP.refunds = (function () {
         const btn    = document.getElementById(`${type}RefundBtn`);
         const amount = document.getElementById(`${type}RefundAmount`);
         const timer  = document.getElementById(`${type}RefundTimer`);
+        if (!btn || !amount || !timer || !data) return;
 
-        amount.textContent = `$${data.potentialAmount.toLocaleString()}`;
+        amount.textContent = `$${(data.potentialAmount || 0).toLocaleString()}`;
 
         // Etiqueta del % arriba a la derecha del botón. Sale de la pérdida DE ESE
         // período, así que cada reembolso puede tener el suyo. Desde los niveles
@@ -218,13 +228,15 @@ VIP.refunds = (function () {
         // (campo `percentage` que devuelve /api/refunds/status) en vez de hardcodear.
         const pctOf = (t) => {
             const p = VIP.state.refundStatus[t] && VIP.state.refundStatus[t].percentage;
-            return (p !== undefined && p !== null) ? p : { weekly: 10, monthly: 5 }[t];
+            return (p !== undefined && p !== null) ? p : { daily: 5, weekly: 10, monthly: 5 }[t];
         };
         const titles = {
+            daily:   `☀️ Reembolso Diario (${pctOf('daily')}%)`,
             weekly:  `📆 Reembolso Semanal (${pctOf('weekly')}%)`,
             monthly: `🗓️ Reembolso Mensual (${pctOf('monthly')}%)`
         };
         const periodLabels = {
+            daily:   '🎮 LO QUE PERDISTE AYER',
             weekly:  '🎮 TU NETWIN DE LA SEMANA PASADA (Lun-Dom)',
             monthly: '🎮 TU NETWIN DEL MES PASADO'
         };
@@ -242,7 +254,36 @@ VIP.refunds = (function () {
         availabilityInfo.style.display = 'none';
         availabilityInfo.innerHTML = '';
 
-        if (type === 'weekly') {
+        // #297: el semanal/mensual muestra cuánto de esa pérdida YA se reembolsó
+        // (por los diarios / semanales) — el número grande es lo que queda.
+        if ((type === 'weekly' || type === 'monthly') && typeData.alreadyRefunded > 0) {
+            availabilityInfo.style.display = 'block';
+            availabilityInfo.style.background = 'rgba(0,255,136,0.08)';
+            availabilityInfo.style.border = '1px solid rgba(0,255,136,0.3)';
+            availabilityInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">✅</span>
+                    <div>
+                        <p style="color: #7fe07f; font-weight: bold; margin: 0; font-size: 12px;">Ya reembolsaste $${Number(typeData.alreadyRefunded).toLocaleString()} de esta pérdida</p>
+                        <p style="color: #ccc; margin: 0; font-size: 11px;">${type === 'weekly' ? 'con el reembolso diario' : 'con los reembolsos diarios y semanales'}. Acá cobrás el ${typeData.percentage}% de lo que queda: <strong>$${Number(typeData.remaining || 0).toLocaleString()}</strong>.</p>
+                    </div>
+                </div>`;
+        }
+
+        if (type === 'daily') {
+            availabilityInfo.style.display = 'block';
+            availabilityInfo.style.background = 'rgba(224,168,0,0.10)';
+            availabilityInfo.style.border = '1px solid rgba(224,168,0,0.35)';
+            availabilityInfo.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">☀️</span>
+                    <div>
+                        <p style="color: #ffd479; font-weight: bold; margin: 0; font-size: 12px;">Reembolso Diario</p>
+                        <p style="color: #ccc; margin: 0; font-size: 11px;">Todos los días podés reclamar lo que perdiste <strong>AYER</strong> (${typeData.period || ''}).</p>
+                        <p style="color: #aaa; margin: 0; font-size: 10px;">Si un día no lo reclamás, no lo perdés: entra en el semanal.</p>
+                    </div>
+                </div>`;
+        } else if (type === 'weekly') {
             const today = new Date().getDay();
             const isClaimableDay = today === 1 || today === 2;
             if (!isClaimableDay) {
@@ -313,8 +354,19 @@ VIP.refunds = (function () {
             }
         }
 
-        if (typeData.potentialAmount <= 0) {
-            extraInfo.innerHTML = '<span style="color: #ff8888;">⚠️ No tenés pérdida (NETWIN) en el período. El reembolso es sobre lo que perdiste jugando.</span>';
+        if (type === 'daily' && typeData.lastClaim && !typeData.canClaim) {
+            // #297: ya reclamó lo de ayer → mañana.
+            isClaimed = true;
+            timeRemaining = 'mañana';
+        }
+
+        if (typeData.potentialAmount <= 0 && typeData.alreadyRefunded > 0 && typeData.netAmount > 0) {
+            extraInfo.innerHTML = '<span style="color: #7fe07f;">🎉 Ya reembolsaste toda tu pérdida de este período con los reembolsos anteriores. No queda nada por cobrar acá.</span>';
+            claimBtn.disabled = true;
+            claimBtn.textContent = '✅ Ya reembolsado';
+            claimBtn.style.background = 'linear-gradient(135deg, #666 0%, #444 100%)';
+        } else if (typeData.potentialAmount <= 0) {
+            extraInfo.innerHTML = '<span style="color: #ff8888;">⚠️ No tenés pérdida (NETWIN) en el período. El reembolso es sobre lo que perdiste jugando.</span>'
             claimBtn.disabled = true;
             claimBtn.textContent = '❌ Sin pérdida para reembolsar';
             claimBtn.style.background = 'linear-gradient(135deg, #666 0%, #444 100%)';
@@ -558,18 +610,21 @@ VIP.refunds = (function () {
                     </div>`;
         }).join('');
         const tbp = (s && s.tiersByPeriod) || null;
+        const _dailyOn = !!(s && s.daily && s.daily.enabled); // #297
         const _sameLadder = tbp &&
-            JSON.stringify(tbp.weekly) === JSON.stringify(tbp.monthly);
+            JSON.stringify(tbp.weekly) === JSON.stringify(tbp.monthly) &&
+            (!_dailyOn || JSON.stringify(tbp.daily) === JSON.stringify(tbp.weekly));
         let tiersHtml;
         if (!tbp || _sameLadder) {
-            // Una sola tabla (las 2 escaleras son iguales o backend viejo).
+            // Una sola tabla (las escaleras son iguales o backend viejo).
             tiersHtml = _tierRows((tbp && tbp.weekly) || (s && s.tiers) || []);
         } else {
             // Escaleras distintas: una mini-tabla por período.
             const bloque = (label, tiers) =>
                 `<div style="font-size:11px;font-weight:800;color:#d4af37;margin:4px 0 2px;">${label}</div>` +
                 _tierRows(tiers);
-            tiersHtml = bloque('🗓️ Semanal', tbp.weekly) +
+            tiersHtml = (_dailyOn ? bloque('☀️ Diario', tbp.daily) : '') +
+                bloque('🗓️ Semanal', tbp.weekly) +
                 bloque('📆 Mensual', tbp.monthly);
         }
 
@@ -588,7 +643,7 @@ VIP.refunds = (function () {
                             <span style="font-size:12px;font-weight:900;color:${t.color};">${t.pct}%</span>
                         </div>
                         <div style="font-size:11px;color:#aaa;margin-top:3px;">
-                            Perdiste ${money(d.netAmount)} · te corresponden <strong style="color:#7fe07f;">${money(d.potentialAmount)}</strong>
+                            Perdiste ${money(d.netAmount)}${d.alreadyRefunded > 0 ? ` · ya reembolsado ${money(d.alreadyRefunded)}` : ''} · te corresponden <strong style="color:#7fe07f;">${money(d.potentialAmount)}</strong>
                         </div>
                         ${falta}
                     </div>`;
@@ -633,7 +688,9 @@ VIP.refunds = (function () {
                 <div style="font-size:11px;color:#999;margin-bottom:10px;line-height:1.45;">
                     Cuanto más perdés en un período, mayor es el porcentaje que te devolvemos.
                     El porcentaje se calcula por separado en cada reembolso.
+                    ${_dailyOn ? 'Cada pérdida se reembolsa una sola vez: lo que cobrás con el diario se descuenta del semanal, y lo del diario y semanal, del mensual.' : ''}
                 </div>
+                ${_dailyOn ? periodo('☀️ Diario (ayer)', s && s.daily) : ''}
                 ${periodo('🗓️ Semanal', s && s.weekly)}
                 ${periodo('📆 Mensual', s && s.monthly)}
 

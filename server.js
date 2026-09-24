@@ -7812,7 +7812,8 @@ async function getRefundTiersByPeriod() {
     cfg = await getConfig(REFUND_TIERS_CONFIG_KEY, null);
   } catch (_) { /* fallback a defaults */ }
   const out = {};
-  for (const period of ['weekly', 'monthly']) {
+  // #297: vuelve el DIARIO (escalera propia; si la config no la tiene → defaults).
+  for (const period of ['daily', 'weekly', 'monthly']) {
     try {
       out[period] = refundTiers.normalizeTiers(cfg && cfg[period]);
     } catch (_) {
@@ -7832,18 +7833,62 @@ async function getRefundTiersByPeriod() {
 // misma razón que getConfig/getRefundTiersByPeriod).
 // ============================================================
 const REFUND_MIN_CONFIG_KEY = 'refundMinimums';
-const REFUND_MIN_DEFAULTS = { weekly: 1500, monthly: 5000 };
+const REFUND_MIN_DEFAULTS = { daily: 500, weekly: 1500, monthly: 5000 };
 async function getRefundMinimums() {
   let cfg = null;
   try {
     cfg = await getConfig(REFUND_MIN_CONFIG_KEY, null);
   } catch (_) { /* fallback a defaults */ }
   const out = {};
-  for (const period of ['weekly', 'monthly']) {
+  for (const period of ['daily', 'weekly', 'monthly']) {
     const n = Number(cfg && cfg[period]);
     out[period] = Number.isFinite(n) && n >= 0 ? Math.round(n) : REFUND_MIN_DEFAULTS[period];
   }
   return out;
+}
+
+// ============================================================
+// REEMBOLSO DIARIO + anti "reembolso de reembolso" (#297, owner 2026-09-24).
+// Regla decidida por el owner:
+//   • DIARIO  = la pérdida de AYER, día por día, SIN mirar lo previo (si ayer
+//               perdió, cobra; si anteayer ganó, no importa). Se reclama
+//               cualquier día, solo lo de ayer; si se le pasa, no se pierde:
+//               cae en el semanal.
+//   • SEMANAL = pérdida NETA de la semana pasada (las ganancias netean) MENOS
+//               la BASE ya reembolsada por los diarios de esa semana. Si
+//               reclamó todos los días → $0.
+//   • MENSUAL = pérdida NETA del mes pasado MENOS la base de los diarios y de
+//               los semanales de ese mes (semana = la que ARRANCA en el mes).
+// La "base" es `RefundClaim.netAmount`: desde #297 guarda la pérdida que
+// efectivamente se reembolsó en ese reclamo (ya descontado lo previo), así el
+// siguiente período resta exactamente lo que se pagó y nunca de más.
+// El % del semanal/mensual sale del rango de la pérdida TOTAL del período
+// (rango real del jugador) y se aplica sobre lo que queda sin reembolsar.
+// El cashback instantáneo (si está encendido) se sigue descontando por MONTO.
+// ============================================================
+const REFUND_DAILY_CONFIG_KEY = 'refundDailyEnabled';
+async function getRefundDailyEnabled() {
+  try {
+    const v = await getConfig(REFUND_DAILY_CONFIG_KEY, null);
+    if (v === null || v === undefined) return true; // default: encendido
+    return v === true || v === 'true' || (v && v.enabled === true);
+  } catch (_) { return true; }
+}
+// Base (pérdida) ya reembolsada por el DIARIO entre dos fechas ART (inclusive).
+async function _dailyRefundBaseBetween(userId, fromStr, toStr) {
+  const agg = await RefundClaim.aggregate([
+    { $match: { userId: String(userId), type: 'daily', periodKey: { $gte: 'daily:' + fromStr, $lte: 'daily:' + toStr } } },
+    { $group: { _id: null, t: { $sum: '$netAmount' } } }
+  ]);
+  return Math.max(0, (agg && agg[0] && agg[0].t) || 0);
+}
+// Base ya reembolsada por SEMANALES cuya semana arranca en el mes 'YYYY-MM'.
+async function _weeklyRefundBaseInMonth(userId, ym) {
+  const agg = await RefundClaim.aggregate([
+    { $match: { userId: String(userId), type: 'weekly', periodKey: { $regex: '^weekly:' + ym } } },
+    { $group: { _id: null, t: { $sum: '$netAmount' } } }
+  ]);
+  return Math.max(0, (agg && agg[0] && agg[0].t) || 0);
 }
 
 /**
@@ -7877,10 +7922,13 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     // Rangos de fechas (zona horaria Argentina)
     const lastWeekRange = periodRanges.getLastWeekRangeArgentinaEpoch();
     const lastMonthRange = periodRanges.getLastMonthRangeArgentinaEpoch();
+    const yesterdayRange = periodRanges.getYesterdayRangeArgentinaEpoch(); // #297
 
-    const [weeklyStatus, monthlyStatus] = await Promise.all([
+    const [weeklyStatus, monthlyStatus, dailyStatus, dailyEnabled] = await Promise.all([
       refunds.canClaimWeeklyRefund(userId),
-      refunds.canClaimMonthlyRefund(userId)
+      refunds.canClaimMonthlyRefund(userId),
+      refunds.canClaimDailyRefund(userId, yesterdayRange.dateStr, yesterdayRange.nextDayIso),
+      getRefundDailyEnabled()
     ]);
 
     // Rangos de fechas para calcular depósitos y retiros reales
@@ -7897,9 +7945,12 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     // Desde la Partner API v1.8 esto sale de `GET /players/{username}/stats`, con la
     // misma API key que el resto. Antes había que ir al PANEL de administración con un
     // Bearer de sesión y el ID numérico del jugador — se fue todo eso.
-    const [wN, mN] = await Promise.all([
+    const dailyFrom = new Date(yesterdayRange.fromEpoch * 1000);
+    const dailyTo = new Date(yesterdayRange.toEpoch * 1000);
+    const [wN, mN, dN] = await Promise.all([
       girox.getPlayerStats(username, weeklyFrom, weeklyTo, 'refund-weekly'),
-      girox.getPlayerStats(username, monthlyFrom, monthlyTo, 'refund-monthly')
+      girox.getPlayerStats(username, monthlyFrom, monthlyTo, 'refund-monthly'),
+      dailyEnabled ? girox.getPlayerStats(username, dailyFrom, dailyTo, 'refund-daily') : Promise.resolve({ success: false })
     ]);
     // ⚠️ `netwin` POSITIVO = el jugador perdió (lo que se reembolsa). Negativo = ganó
     // en el período → no hay nada que devolver, se corta en 0.
@@ -7909,6 +7960,17 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     const _loss = (r) => (r.success ? Math.max(0, (Number(r.casinoNetwin) || 0) - (Number(r.bonusGranted) || 0)) : 0);
     const weeklyNetLoss = _loss(wN);
     const monthlyNetLoss = _loss(mN);
+    const dailyNetLoss = _loss(dN);
+    // #297: lo que ya se reembolsó (base) dentro de cada período por los
+    // reembolsos más chicos → el período grande solo paga lo que falta.
+    let weeklyBaseDone = 0, monthlyBaseDone = 0;
+    try {
+      weeklyBaseDone = await _dailyRefundBaseBetween(userId, lastWeekRange.fromDateStr, lastWeekRange.toDateStr);
+      monthlyBaseDone = (await _dailyRefundBaseBetween(userId, lastMonthRange.fromDateStr, lastMonthRange.toDateStr)) +
+        (await _weeklyRefundBaseInMonth(userId, lastMonthRange.fromDateStr.slice(0, 7)));
+    } catch (_) {}
+    const weeklyRemaining = Math.max(0, weeklyNetLoss - weeklyBaseDone);
+    const monthlyRemaining = Math.max(0, monthlyNetLoss - monthlyBaseDone);
 
     logger.info(`[REFUND] status — ${username} NETWIN(casino) weekly:${wN.casinoNetwin}−bono ${wN.bonusGranted || 0}→${weeklyNetLoss} monthly:${mN.casinoNetwin}−bono ${mN.bonusGranted || 0}→${monthlyNetLoss}`);
 
@@ -7917,8 +7979,12 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     // tiene su PROPIA escalera (editable desde el panel): un mismo jugador puede
     // estar en el tope del mensual y en el rango más bajo del semanal.
     const [tiersByPeriod, refundMins] = await Promise.all([getRefundTiersByPeriod(), getRefundMinimums()]);
+    // % por el rango de la pérdida TOTAL del período; monto sobre lo que queda (#297).
     const weeklyCalc = refundTiers.calcRefund(weeklyNetLoss, tiersByPeriod.weekly);
+    weeklyCalc.amount = Math.round(weeklyRemaining * weeklyCalc.pct / 100);
     const monthlyCalc = refundTiers.calcRefund(monthlyNetLoss, tiersByPeriod.monthly);
+    monthlyCalc.amount = Math.round(monthlyRemaining * monthlyCalc.pct / 100);
+    const dailyCalc = refundTiers.calcRefund(dailyNetLoss, tiersByPeriod.daily);
     // CASHBACK INSTANTÁNEO (#254): mostrar el neto (con el descuento) para que
     // el número que ve el cliente coincida con lo que va a cobrar.
     try {
@@ -7926,8 +7992,10 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
       const _mr = periodRanges.getLastMonthRangeArgentinaEpoch();
       const _wPaid = await _cashbackPaidBetween(req.user.userId, new Date(_wr.fromEpoch * 1000), new Date(_wr.toEpoch * 1000));
       const _mPaid = await _cashbackPaidBetween(req.user.userId, new Date(_mr.fromEpoch * 1000), new Date(_mr.toEpoch * 1000));
+      const _dPaid = await _cashbackPaidBetween(req.user.userId, dailyFrom, dailyTo);
       if (_wPaid > 0) weeklyCalc.amount = Math.max(0, weeklyCalc.amount - _wPaid);
       if (_mPaid > 0) monthlyCalc.amount = Math.max(0, monthlyCalc.amount - _mPaid);
+      if (_dPaid > 0) dailyCalc.amount = Math.max(0, dailyCalc.amount - _dPaid);
     } catch (_) {}
 
     // `tier` se manda entero (nombre, emoji, color, cuánto falta para subir y cuál es
@@ -7953,26 +8021,28 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
       // escalera; el front nuevo usa `tiersByPeriod`.
       tiers: refundTiers.listTiers(tiersByPeriod.weekly),
       tiersByPeriod: {
+        daily: refundTiers.listTiers(tiersByPeriod.daily),
         weekly: refundTiers.listTiers(tiersByPeriod.weekly),
         monthly: refundTiers.listTiers(tiersByPeriod.monthly)
       },
-      // 🪦 Stub de compat: el reembolso DIARIO se eliminó (2026-08-07), pero las
-      // PWAs cacheadas viejas hacen `daily.potentialAmount` sin chequear y un
-      // undefined les rompería TODO el recuadro hasta que el SW se actualice.
-      // Siempre $0 y no reclamable — el front nuevo lo ignora por completo.
+      // #297: DIARIO de vuelta — la pérdida de AYER, día por día.
       daily: {
-        canClaim: false,
-        nextClaim: null,
-        potentialAmount: 0,
-        netAmount: 0,
-        percentage: 0,
-        tier: null,
-        period: ''
+        enabled: dailyEnabled,
+        ...(dailyEnabled ? dailyStatus : { canClaim: false, nextClaim: null }),
+        potentialAmount: dailyEnabled ? dailyCalc.amount : 0,
+        netAmount: dailyNetLoss,
+        percentage: dailyCalc.pct,
+        tier: tierOut(dailyCalc),
+        period: yesterdayRange.dateStr,
+        minAmount: refundMins.daily,
+        belowMinimum: dailyCalc.amount > 0 && dailyCalc.amount < refundMins.daily
       },
       weekly: {
         ...weeklyStatus,
         potentialAmount: weeklyCalc.amount,
         netAmount: weeklyNetLoss,
+        alreadyRefunded: weeklyBaseDone,   // #297: base ya cobrada por diarios
+        remaining: weeklyRemaining,
         percentage: weeklyCalc.pct,
         tier: tierOut(weeklyCalc),
         period: `${lastWeekRange.fromDateStr} a ${lastWeekRange.toDateStr}`,
@@ -7985,6 +8055,8 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
         ...monthlyStatus,
         potentialAmount: monthlyCalc.amount,
         netAmount: monthlyNetLoss,
+        alreadyRefunded: monthlyBaseDone,  // #297: base ya cobrada por diarios + semanales
+        remaining: monthlyRemaining,
         percentage: monthlyCalc.pct,
         tier: tierOut(monthlyCalc),
         period: `${lastMonthRange.fromDateStr} a ${lastMonthRange.toDateStr}`,
@@ -7998,16 +8070,119 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
   }
 });
 
-// 🪦 REEMBOLSO DIARIO ELIMINADO (owner, 2026-08-07). El endpoint queda como
-// stub amable para PWAs cacheadas viejas que todavía muestran el botón: nunca
-// acredita nada. Mismo criterio que register-quick (#141). El código completo
-// está en el historial de git si alguna vez se quisiera revertir.
-app.post('/api/refunds/claim/daily', authMiddleware, (req, res) => {
-  res.json({
-    success: false,
-    canClaim: false,
-    message: 'El reembolso diario ya no está disponible. Seguí aprovechando el SEMANAL (lun-mar) y el MENSUAL (desde el día 7).'
-  });
+// REEMBOLSO DIARIO (#297, vuelve el 2026-09-24): la pérdida de AYER (hora ART),
+// día por día, sin mirar lo previo. Mismo esqueleto que el semanal: lock →
+// netwin fresh → escalera diaria → mínimo → reserva atómica (userId+type+
+// periodKey 'daily:YYYY-MM-DD') → bono en 1girox con reference del período →
+// Transaction. Si el cliente NO lo reclama ese día, la pérdida queda para el
+// semanal (que descuenta la base de los diarios cobrados).
+app.post('/api/refunds/claim/daily', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const username = req.user.username;
+
+    if (!(await getRefundDailyEnabled())) {
+      return res.json({ success: false, canClaim: false, message: 'El reembolso diario no está disponible por el momento. Seguí aprovechando el SEMANAL y el MENSUAL.' });
+    }
+    if (!await acquireRefundLock(userId, 'daily')) {
+      return res.json({ success: false, message: '⏳ Ya estás procesando un reembolso. Por favor espera...', canClaim: true, processing: true });
+    }
+
+    try {
+      const yr = periodRanges.getYesterdayRangeArgentinaEpoch();
+      const status = await refunds.canClaimDailyRefund(userId, yr.dateStr, yr.nextDayIso);
+      if (!status.canClaim) {
+        return res.json({ success: false, message: 'Ya reclamaste el reembolso de ayer. Mañana podés reclamar el de hoy.', canClaim: false, nextClaim: status.nextClaim });
+      }
+
+      const fromDate = new Date(yr.fromEpoch * 1000);
+      const toDate = new Date(yr.toEpoch * 1000);
+      const netRes = await girox.getPlayerStats(username, fromDate, toDate, 'refund-daily', { fresh: true });
+      if (!netRes.success) {
+        logger.warn(`[REFUND] daily — no se pudo leer NETWIN de ${username}: ${netRes.error || 's/detalle'}`);
+        return res.json({ success: false, message: 'No pudimos calcular tu pérdida en este momento (la plataforma está demorada). Probá en unos minutos.', canClaim: true });
+      }
+      // netwin POSITIVO = perdió. Solo casino. Menos el bono otorgado ayer (#274).
+      const netLoss = Math.max(0, (Number(netRes.casinoNetwin) || 0) - (Number(netRes.bonusGranted) || 0));
+      logger.info('[REFUND] daily — usuario:', username, 'dia:', yr.dateStr, 'netwin(casino):', netRes.casinoNetwin, 'bono otorgado:', netRes.bonusGranted || 0, 'netLoss:', netLoss);
+      if (netRes.playerId) {
+        User.updateOne({ id: userId, giroxUserId: null }, { $set: { giroxUserId: netRes.playerId } }).catch(() => {});
+      }
+      if (netLoss === 0) {
+        return res.json({ success: false, message: 'No tenés pérdida ayer. El reembolso diario aplica solo sobre lo que perdiste jugando ese día.', canClaim: true, netAmount: 0 });
+      }
+
+      const _calc = refundTiers.calcRefund(netLoss, (await getRefundTiersByPeriod()).daily);
+      const dailyPct = _calc.pct;
+      // Cashback instantáneo cobrado AYER se descuenta por monto (misma pérdida, una vez).
+      let _cbkPaidD = 0;
+      try { _cbkPaidD = await _cashbackPaidBetween(userId, fromDate, toDate); } catch (_) {}
+      const refundAmount = Math.max(0, _calc.amount - _cbkPaidD);
+      if (_cbkPaidD > 0) logger.info(`[REFUND] daily — ${username}: descuento cashback instantáneo $${_cbkPaidD} (bruto $${_calc.amount} → $${refundAmount})`);
+
+      const _minDaily = (await getRefundMinimums()).daily;
+      if (_minDaily > 0 && refundAmount < _minDaily) {
+        return res.json({
+          success: false,
+          message: `🚫 No llegaste al mínimo del reembolso diario: tu reembolso de ayer es $${refundAmount.toLocaleString('es-AR')} y el mínimo para cobrarlo es $${_minDaily.toLocaleString('es-AR')}. Tranquilo: esa pérdida entra en el SEMANAL.`,
+          canClaim: true, belowMinimum: true, minAmount: _minDaily, amount: refundAmount, netAmount: netLoss
+        });
+      }
+      if (refundAmount <= 0) {
+        return res.json({ success: false, message: 'Tu pérdida de ayer ya fue reembolsada (cashback instantáneo).', canClaim: true, netAmount: 0 });
+      }
+
+      // Reserva atómica (índice único userId+type+periodKey) ANTES de acreditar.
+      const _refundClaimId = uuidv4();
+      const _refundPeriodKey = 'daily:' + yr.dateStr;
+      try {
+        await RefundClaim.create({
+          id: _refundClaimId, userId, username, type: 'daily',
+          amount: refundAmount, netAmount: netLoss, percentage: dailyPct,
+          period: yr.dateStr, periodKey: _refundPeriodKey, claimedAt: new Date()
+        });
+      } catch (e) {
+        if (e && e.code === 11000) {
+          return res.json({ success: false, message: 'Ya reclamaste el reembolso de ayer.', canClaim: false });
+        }
+        throw e;
+      }
+
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
+      if (!depositResult.success) {
+        await RefundClaim.deleteOne({ id: _refundClaimId }).catch(() => {});
+        return res.json({ success: false, message: 'Error al acreditar el reembolso: ' + depositResult.error, canClaim: true });
+      }
+      const _refundTxId = depositResult.data?.transfer_id || depositResult.data?.transferId;
+      if (_refundTxId) await RefundClaim.updateOne({ id: _refundClaimId }, { $set: { transactionId: _refundTxId } }).catch(() => {});
+
+      await Transaction.create({
+        id: uuidv4(), type: 'refund', amount: refundAmount, username,
+        description: `Reembolso diario (${yr.dateStr})`, transactionId: _refundTxId, timestamp: new Date()
+      });
+
+      try {
+        const u = await User.findOne({ id: userId }).lean();
+        metaCapi.track(
+          'RefundClaim',
+          { email: u && u.email, phone: u && u.phone, externalId: userId, fbc: u && u.metaFbc, fbp: u && u.metaFbp },
+          { value: refundAmount, currency: 'ARS', content_name: 'refund_daily', period: yr.dateStr },
+          { eventId: req.body && req.body.metaEventId, req }
+        );
+      } catch (e) { /* tracking nunca bloquea */ }
+
+      res.json({
+        success: true,
+        message: `¡Reembolso diario de $${refundAmount.toLocaleString('es-AR')} acreditado!`,
+        amount: refundAmount, percentage: dailyPct, netAmount: netLoss, nextClaim: yr.nextDayIso
+      });
+    } finally {
+      setTimeout(() => releaseRefundLock(userId, 'daily'), 3000);
+    }
+  } catch (error) {
+    console.error('Error reclamando reembolso diario:', error);
+    res.json({ success: false, message: 'Error del servidor', canClaim: true });
+  }
 });
 
 app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
@@ -8075,8 +8250,17 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
         });
       }
 
-      // El % sale del rango de la pérdida con la escalera del SEMANAL (editable en el panel).
+      // #297: descontar la BASE ya reembolsada por los DIARIOS de esa semana.
+      // El % sale del rango de la pérdida TOTAL de la semana; el monto, sobre lo que queda.
+      const _dailyBaseW = await _dailyRefundBaseBetween(userId, fromDateStr, toDateStr);
+      const _remainW = Math.max(0, netLoss - _dailyBaseW);
+      if (_remainW === 0) {
+        logger.info(`[REFUND] weekly — ${username}: toda la pérdida de la semana ($${netLoss}) ya fue reembolsada por el diario ($${_dailyBaseW})`);
+        return res.json({ success: false, message: '🎉 Ya reembolsaste toda tu pérdida de la semana con el reembolso diario. No queda nada por cobrar en el semanal.', canClaim: true, netAmount: 0, alreadyRefunded: _dailyBaseW });
+      }
       const _calc = refundTiers.calcRefund(netLoss, (await getRefundTiersByPeriod()).weekly);
+      _calc.amount = Math.round(_remainW * _calc.pct / 100);
+      if (_dailyBaseW > 0) logger.info(`[REFUND] weekly — ${username}: base ya reembolsada por diarios $${_dailyBaseW} → queda $${_remainW} de $${netLoss}`);
       const weeklyPct = _calc.pct;
       // CASHBACK INSTANTÁNEO (#254): lo ya cobrado como cashback en ese período
       // se descuenta (la misma pérdida no se reembolsa dos veces).
@@ -8116,7 +8300,7 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
       try {
         await RefundClaim.create({
           id: _refundClaimId, userId, username, type: 'weekly',
-          amount: refundAmount, netAmount: netLoss, percentage: weeklyPct,
+          amount: refundAmount, netAmount: _remainW, percentage: weeklyPct, // netAmount = base efectivamente reembolsada (#297)
           period: `${fromDateStr} a ${toDateStr}`, periodKey: _refundPeriodKey, claimedAt: new Date()
         });
       } catch (e) {
@@ -8246,8 +8430,18 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
         });
       }
 
-      // El % sale del rango de la pérdida con la escalera del MENSUAL (editable en el panel).
+      // #297: descontar la base ya reembolsada por DIARIOS y SEMANALES del mes.
+      const _dailyBaseM = await _dailyRefundBaseBetween(userId, fromDateStr, toDateStr);
+      const _weeklyBaseM = await _weeklyRefundBaseInMonth(userId, fromDateStr.slice(0, 7));
+      const _remainM = Math.max(0, netLoss - _dailyBaseM - _weeklyBaseM);
+      if (_remainM === 0) {
+        logger.info(`[REFUND] monthly — ${username}: toda la pérdida del mes ($${netLoss}) ya fue reembolsada (diarios $${_dailyBaseM} + semanales $${_weeklyBaseM})`);
+        return res.json({ success: false, message: '🎉 Ya reembolsaste toda tu pérdida del mes con los reembolsos diarios/semanales. No queda nada por cobrar en el mensual.', canClaim: true, netAmount: 0, alreadyRefunded: _dailyBaseM + _weeklyBaseM });
+      }
+      // El % sale del rango de la pérdida TOTAL del mes; el monto, sobre lo que queda.
       const _calc = refundTiers.calcRefund(netLoss, (await getRefundTiersByPeriod()).monthly);
+      _calc.amount = Math.round(_remainM * _calc.pct / 100);
+      if (_dailyBaseM + _weeklyBaseM > 0) logger.info(`[REFUND] monthly — ${username}: base ya reembolsada $${_dailyBaseM + _weeklyBaseM} → queda $${_remainM} de $${netLoss}`);
       // CASHBACK INSTANTÁNEO (#254): descuento de lo cobrado en el período.
       let _cbkPaidM = 0;
       try { _cbkPaidM = await _cashbackPaidBetween(userId, fromDate, toDate); } catch (_) {}
@@ -8281,7 +8475,7 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
       try {
         await RefundClaim.create({
           id: _refundClaimId, userId, username, type: 'monthly',
-          amount: refundAmount, netAmount: netLoss, percentage: monthlyPct,
+          amount: refundAmount, netAmount: _remainM, percentage: monthlyPct, // netAmount = base efectivamente reembolsada (#297)
           period: `${fromDateStr} a ${toDateStr}`, periodKey: _refundPeriodKey, claimedAt: new Date()
         });
       } catch (e) {
@@ -8659,13 +8853,15 @@ app.get('/api/admin/refund-tiers', authMiddleware, adminMiddleware, async (req, 
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Solo el admin general puede ver los rangos de reembolso.' });
     }
-    const [tbp, minimums] = await Promise.all([getRefundTiersByPeriod(), getRefundMinimums()]);
+    const [tbp, minimums, dailyEnabled] = await Promise.all([getRefundTiersByPeriod(), getRefundMinimums(), getRefundDailyEnabled()]);
     res.json({
       tiersByPeriod: {
+        daily: refundTiers.listTiers(tbp.daily),
         weekly: refundTiers.listTiers(tbp.weekly),
         monthly: refundTiers.listTiers(tbp.monthly)
       },
       minimums,
+      dailyEnabled,
       defaults: refundTiers.listTiers(refundTiers.DEFAULT_TIERS),
       maxTiers: refundTiers.MAX_TIERS
     });
@@ -8683,9 +8879,13 @@ app.post('/api/admin/refund-tiers', authMiddleware, adminMiddleware, async (req,
     const b = req.body || {};
     // Cada período se valida por separado; un error corta TODO el guardado (o se
     // guardan las 2 escaleras válidas, o ninguna — nada de estados a medias).
+    // #297: el DIARIO es opcional en el body (panel cacheado viejo) → si no
+    // viene, se conserva la escalera diaria vigente.
+    const _cur = await getRefundTiersByPeriod();
     const normalized = {};
-    for (const period of ['weekly', 'monthly']) {
-      const label = { weekly: 'Semanal', monthly: 'Mensual' }[period];
+    for (const period of ['daily', 'weekly', 'monthly']) {
+      const label = { daily: 'Diario', weekly: 'Semanal', monthly: 'Mensual' }[period];
+      if (period === 'daily' && b.daily == null) { normalized.daily = _cur.daily; continue; }
       try {
         normalized[period] = refundTiers.normalizeTiers(b[period]);
       } catch (e) {
@@ -8698,8 +8898,10 @@ app.post('/api/admin/refund-tiers', authMiddleware, adminMiddleware, async (req,
     let minimums = null;
     if (b.minimums != null) {
       minimums = {};
-      for (const period of ['weekly', 'monthly']) {
-        const label = { weekly: 'Semanal', monthly: 'Mensual' }[period];
+      const _curMins = await getRefundMinimums();
+      for (const period of ['daily', 'weekly', 'monthly']) {
+        const label = { daily: 'Diario', weekly: 'Semanal', monthly: 'Mensual' }[period];
+        if (period === 'daily' && b.minimums.daily == null) { minimums.daily = _curMins.daily; continue; }
         const n = Number(b.minimums[period]);
         if (!Number.isFinite(n) || n < 0 || n > 10000000) {
           return res.status(400).json({ error: `${label}: mínimo para cobrar inválido (0 a 10.000.000; 0 = sin mínimo).` });
@@ -8710,17 +8912,21 @@ app.post('/api/admin/refund-tiers', authMiddleware, adminMiddleware, async (req,
     // Se guarda solo lo editable (name/pct/max); emoji/color/min se derivan al leer.
     // (Si la config vieja tenía una escalera `daily`, este guardado la deja afuera.)
     const toSave = {};
-    for (const period of ['weekly', 'monthly']) {
+    for (const period of ['daily', 'weekly', 'monthly']) {
       toSave[period] = normalized[period].map((t) => ({ name: t.name, pct: t.pct, max: t.max }));
+    }
+    if (typeof b.dailyEnabled === 'boolean') {
+      await Config.set(REFUND_DAILY_CONFIG_KEY, b.dailyEnabled, req.user.username);
+      logger.info(`[refund-tiers] reembolso DIARIO ${b.dailyEnabled ? 'ENCENDIDO' : 'APAGADO'} por ${req.user.username}`);
     }
     // Config.set (no setConfig) para dejar registrado QUIÉN lo cambió (updatedBy).
     await Config.set(REFUND_TIERS_CONFIG_KEY, toSave, req.user.username);
     if (minimums) {
       await Config.set(REFUND_MIN_CONFIG_KEY, minimums, req.user.username);
-      logger.info(`[refund-tiers] mínimos actualizados por ${req.user.username}: semanal=$${minimums.weekly} mensual=$${minimums.monthly}`);
+      logger.info(`[refund-tiers] mínimos actualizados por ${req.user.username}: diario=$${minimums.daily} semanal=$${minimums.weekly} mensual=$${minimums.monthly}`);
     }
     logger.info(`[refund-tiers] actualizado por ${req.user.username}: ` +
-      ['weekly', 'monthly'].map((p) =>
+      ['daily', 'weekly', 'monthly'].map((p) =>
         `${p}=[${normalized[p].map((t) => `${t.name} ${t.pct}%≤${t.max === null ? '∞' : t.max}`).join(', ')}]`).join(' · '));
     // Aviso de mantenimiento manual: comandos /sys_* que mencionan % o reembolsos
     // NO se tocan solos — el panel se los muestra al admin para que los revise.
@@ -8728,10 +8934,12 @@ app.post('/api/admin/refund-tiers', authMiddleware, adminMiddleware, async (req,
     res.json({
       success: true,
       tiersByPeriod: {
+        daily: refundTiers.listTiers(normalized.daily),
         weekly: refundTiers.listTiers(normalized.weekly),
         monthly: refundTiers.listTiers(normalized.monthly)
       },
       minimums: minimums || await getRefundMinimums(),
+      dailyEnabled: await getRefundDailyEnabled(),
       commandWarnings
     });
   } catch (error) {
