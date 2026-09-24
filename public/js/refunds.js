@@ -171,7 +171,7 @@ VIP.refunds = (function () {
         btn.classList.remove('claimed');
 
         if (data.needsApp && data.potentialAmount > 0) {
-            timer.textContent = '📲 Instalá la app';
+            timer.textContent = '📲 App + notif.';
             btn.style.opacity = '0.85';
         } else if (data.canClaim && data.potentialAmount > 0) {
             timer.textContent = '¡Listo!';
@@ -365,7 +365,7 @@ VIP.refunds = (function () {
 
         if (typeData.needsApp) {
             // #301: reembolsos solo desde la app instalada.
-            extraInfo.innerHTML = '<span style="color: #ffd479;">📲 Para reclamar tu reembolso necesitás tener la <strong>app instalada</strong> (agregada a la pantalla de inicio) con las notificaciones activadas.</span>';
+            extraInfo.innerHTML = '<span style="color: #ffd479;">📲 Para reclamar tu reembolso necesitás <strong>2 cosas</strong>: ① la <strong>app instalada</strong> (agregada a la pantalla de inicio) y ② las <strong>notificaciones activadas</strong> dentro de la app. Con una sola no alcanza.</span>';
             claimBtn.disabled = false;
             claimBtn.textContent = '📲 Instalar la app';
             claimBtn.style.background = 'linear-gradient(135deg, #26e07f 0%, #0f9d58 100%)';

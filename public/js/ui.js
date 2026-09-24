@@ -3172,7 +3172,7 @@ function _rwPeriodRefundsBody() {
     const amt = Number(d.potentialAmount) || 0;
     const ok = d.canClaim && amt > 0 && !d.belowMinimum;
     let status;
-    if (d.needsApp) status = '<span style="color:#ffd479;font-weight:800;">📲 Necesitás la app instalada para reclamar</span>';
+    if (d.needsApp) status = '<span style="color:#ffd479;font-weight:800;">📲 Necesitás la app instalada + notificaciones activas</span>';
     else if (ok) status = '<span style="color:#26e07f;font-weight:800;">¡Listo para reclamar!</span>';
     else if (amt > 0 && d.belowMinimum) status = 'Mínimo para cobrar ' + _rwFmt(d.minAmount) + (r.key === 'daily' ? ' · entra en el semanal' : '');
     else if (amt <= 0 && d.alreadyRefunded > 0 && d.netAmount > 0) status = '<span style="color:#7fe07f;">✅ Ya reembolsado (' + _rwFmt(d.alreadyRefunded) + ')</span>';
@@ -3195,7 +3195,7 @@ function _rwPeriodRefundsBody() {
     '</div>';
   });
   if (html && st.appInstalled === false) {
-    html = '<div style="font-size:12px;color:#ffd479;background:rgba(255,212,121,0.08);border:1px solid rgba(255,212,121,0.3);border-radius:10px;padding:8px 10px;margin-bottom:4px;">📲 Los reembolsos se reclaman <b>desde la app instalada</b> (agregada a la pantalla de inicio, con notificaciones). Tocá <b>Instalar</b> y te guiamos.</div>' + html;
+    html = '<div style="font-size:12px;color:#ffd479;background:rgba(255,212,121,0.08);border:1px solid rgba(255,212,121,0.3);border-radius:10px;padding:8px 10px;margin-bottom:4px;line-height:1.45;">📲 Para reclamar reembolsos necesitás <b>2 cosas</b>: ① la <b>app instalada</b> (agregada a la pantalla de inicio) y ② las <b>notificaciones activadas</b> dentro de la app. Con una sola no alcanza. Tocá <b>Instalar</b> y te guiamos paso a paso.</div>' + html;
   }
   return html || '<div style="font-size:13px;color:#9aa4b0;">Por ahora no hay reembolsos activos.</div>';
 }
@@ -3313,7 +3313,7 @@ VIP.ui.openRewardsHub = function() {
         '<span style="font-size:12px;color:#9aa4b0;">⏰ Próximo giro en <b>' + _rwCountdown(dy.nextResetAt) + '</b> (24 h desde tu último giro)</span></div>';
       cta = _rwCta('⏰ Próximo giro en ' + _rwCountdown(dy.nextResetAt), '', false);
     } else if (dy.needsApp) {
-      body = '<div style="font-size:13px;color:#cfd6de;line-height:1.4;">📲 El giro diario se activa con la <b>app instalada y las notificaciones aceptadas</b>.</div>';
+      body = '<div style="font-size:13px;color:#cfd6de;line-height:1.4;">📲 El giro diario se activa con <b>2 cosas</b>: ① la <b>app instalada</b> (agregada al inicio) y ② las <b>notificaciones aceptadas</b> dentro de la app. Con una sola no alcanza.</div>';
       // Guía PROPIA del hub (#256c): la vieja (installApp) dibujaba su cartel
       // DEBAJO del overlay del casino y no se veía nada.
       // #272: si la app ya está instalada y SOLO faltan las notificaciones, el
@@ -3411,7 +3411,7 @@ VIP.ui.openRewardsHub = function() {
       li('🗓️', '<b style="color:#fff;">Mensual:</b> desde el día 7 reclamás la pérdida del <b style="color:#fff;">mes pasado</b>.') +
       li('1️⃣', 'Cada pérdida se reembolsa <b style="color:#fff;">una sola vez</b>: lo que ya cobraste con el diario se descuenta del semanal, y lo del diario y semanal, del mensual. Si un día no reclamás el diario, no lo perdés: entra en el semanal.') +
       li('📈', 'Cuanto más perdés en el período, mayor el %. Tocá tu USUARIO en la app para ver la escala completa.') +
-      li('📲', 'Se reclaman <b style="color:#fff;">desde la app instalada</b> (igual que la ruleta diaria).') +
+      li('📲', 'Se reclaman <b style="color:#fff;">desde la app instalada</b> y con las <b style="color:#fff;">notificaciones activadas</b> — las dos cosas, igual que la ruleta diaria.') +
       li('⚽', '<b style="color:#ff8a80;">DEPORTES NO genera reembolso</b>: solo cuenta lo que jugás en <b style="color:#26e07f;">slots y casino</b>.') +
       li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b>.')
     );

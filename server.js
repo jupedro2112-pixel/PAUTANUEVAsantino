@@ -7868,7 +7868,7 @@ async function getRefundMinimums() {
 // ============================================================
 // #301: gate "app instalada" para reclamar CUALQUIER reembolso. Devuelve null
 // si puede, o la respuesta JSON a devolver si no.
-const REFUND_NEEDS_APP_MSG = '📲 Para reclamar tu reembolso necesitás tener la APP instalada (agregada a la pantalla de inicio) con las notificaciones activadas. Instalala desde el botón "📱 Instalar App" o desde 🎁 PREMIOS → Instalar la app.';
+const REFUND_NEEDS_APP_MSG = '📲 Para reclamar tu reembolso necesitás 2 cosas: (1) la APP instalada (agregada a la pantalla de inicio) y (2) las NOTIFICACIONES activadas dentro de la app. Con una sola no alcanza. Instalala desde el botón "📱 Instalar App" o desde 🎁 PREMIOS → Instalar, y aceptá las notificaciones cuando te lo pida.';
 async function _refundAppGate(userId) {
   const u = await User.findOne({ id: userId }).select('fcmTokenContext fcmTokens').lean();
   if (_rouletteHasAppInstalled(u)) return null;

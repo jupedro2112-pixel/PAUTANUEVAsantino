@@ -8,6 +8,13 @@
 
 ## Sesión 2026-09-24
 
+### 301b. Avisos claros: "app instalada + notificaciones activas" (las 2 cosas)
+- Owner: "avisar que tiene que tener app y notificaciones activas, para evitar que la
+  gente no entienda". Todos los textos de `needsApp` (mensaje del server, hub PREMIOS
+  —aviso, fila y ruleta diaria—, modal del dashboard, INFORMACIÓN) dicen explícito
+  "2 cosas: ① app instalada (agregada al inicio) ② notificaciones activadas dentro de la
+  app. Con una sola no alcanza". SW → v182.
+
 ### 301. Reembolsos solo con la APP instalada + botón "Instalar App" vuelve cada 24 h
 - Owner: "ruleta diaria y reembolsos precisan tener app instalada". La ruleta diaria ya
   lo exigía (`_rouletteHasAppInstalled`: token FCM de contexto `standalone`). Ahora los
