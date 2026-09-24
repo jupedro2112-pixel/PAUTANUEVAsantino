@@ -8,6 +8,17 @@
 
 ## Sesión 2026-09-24
 
+### 294. Rueda: etiquetas RADIALES centradas en cada gajo + sin scroll horizontal en celular
+- Owner (captura iPhone 14): los nombres no quedaban centrados en los gajos (iban
+  horizontales, a radio escalonado, y se pisaban con las líneas). Ahora `_wheelMarkup`
+  dibuja cada etiqueta como una barra radial (del cubo al aro, sobre el eje del gajo,
+  `transform-origin` en el centro) que **gira con la rueda**; en la mitad izquierda se
+  invierten para no quedar cabeza abajo. Se quitó la contra-rotación de `.wrLbl` en los
+  dos spins (bienvenida y diaria).
+- Scroll horizontal: la rueda era 86% del ancho + aro 11% + padding 16px por lado →
+  sobraban ~15px en 393px. Nuevo `VIP.ui._wheelSize()` (descuenta aro y padding) y
+  `overflow-x:hidden` en `#wrOverlay`. SW → v174. Solo front.
+
 ### 293. Reiniciar la ruleta para UN SOLO usuario (pruebas)
 - Pedido: "quiero ver cómo quedó la ruleta pero ya al tirar no puedo verla; no hay forma
   de reiniciarla para una sola persona". Antes solo existía el reset diario GLOBAL.

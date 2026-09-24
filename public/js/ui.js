@@ -2702,8 +2702,7 @@ VIP.ui._renderRoulette = function() {
   VIP.ui.casinoRouletteClose(true);
   const segs = VIP.ui._wrSegments || [];
   const n = Math.max(1, segs.length);
-  const S = Math.max(240, Math.min(Math.floor(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.46)), 360));
-  const R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
+  const S = VIP.ui._wheelSize();
   const fs = S >= 320 ? 16 : (S >= 280 ? 14 : 12);
   const ov = document.createElement('div');
   ov.id = 'wrOverlay';
@@ -2711,7 +2710,7 @@ VIP.ui._renderRoulette = function() {
     // justify-content:center RECORTABA la parte de arriba en pantallas cortas
     // (bug de flex+overflow) → top-aligned con padding; scroll táctil iOS (#261).
     'align-items:center;padding:calc(26px + env(safe-area-inset-top,0px)) 16px calc(26px + env(safe-area-inset-bottom,0px));' +
-    'box-sizing:border-box;font-family:inherit;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
+    'box-sizing:border-box;font-family:inherit;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
   ov.innerHTML =
     '<button type="button" onclick="VIP.ui.casinoRouletteClose()" aria-label="Cerrar" ' +
       'style="position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);' +
@@ -2735,11 +2734,18 @@ VIP.ui._renderRoulette = function() {
 // por las dos ruletas. Capas: aro dorado con "luces" (repeating-conic), gajos
 // con paleta rica + separadores finos + profundidad radial, brillo superior
 // fijo (no gira), cubo central con el logo (no gira) y puntero con pin. El
-// elemento que GIRA sigue siendo #wrWheel (el spin no cambió) y las etiquetas
-// .wrLbl siguen contra-rotando.
+// elemento que GIRA sigue siendo #wrWheel (el spin no cambió). Las etiquetas
+// .wrLbl son radiales y giran con la rueda (#294; antes contra-rotaban).
 // ============================================================
+// #294: tamaño de la rueda. Antes S = 86% del ancho, pero el aro suma 11% y el
+// overlay tiene 16px de padding por lado → en celular sobraban ~15px y aparecía
+// un scroll HORIZONTAL. Ahora S se calcula para que rueda + aro entren.
+VIP.ui._wheelSize = function() {
+  const w = Math.floor((window.innerWidth - 40) / 1.11);
+  return Math.max(220, Math.min(w, Math.floor(window.innerHeight * 0.46), 360));
+};
 VIP.ui._wheelMarkup = function(o) {
-  const S = o.S, n = Math.max(1, o.segs.length), R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
+  const S = o.S, n = Math.max(1, o.segs.length), R = S / 2;
   const fs = o.fs, pal = o.palette, acc = o.accent, acc2 = o.accent2;
   let stops = '';
   for (let i = 0; i < n; i++) {
@@ -2747,16 +2753,24 @@ VIP.ui._wheelMarkup = function(o) {
     stops += pal[i % pal.length] + ' ' + a0 + 'deg ' + a1 + 'deg' + (i < n - 1 ? ',' : '');
   }
   let labels = '';
+  // #294: etiquetas RADIALES centradas en cada gajo (owner: "que estén centrados
+  // los nombres"). Antes iban horizontales a radio escalonado y se salían del
+  // gajo. Ahora cada una es una barra que va del cubo al aro sobre el eje del
+  // gajo (transform-origin en el centro de la rueda) y GIRA con la rueda (ya no
+  // contra-rotan). En la mitad izquierda se dan vuelta para que no queden
+  // cabeza abajo (se leen del aro hacia el centro).
+  const rIn = Math.round(S * 0.135), rOut = Math.round(S * 0.455);
   for (let i = 0; i < n; i++) {
     const ang = (360 / n) * i + (360 / n) / 2;
-    const rad = ang * Math.PI / 180;
-    const ri = rr * (i % 2 === 0 ? 0.74 : 1.24); // radio escalonado (#256f)
-    const x = R + ri * Math.sin(rad), y = R - ri * Math.cos(rad);
+    const flip = ang > 180 && ang < 360;
     const gold = /\$/.test(o.segs[i] || '');
-    labels += '<div class="wrLbl" style="position:absolute;left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;' +
-      'transform:translate(-50%,-50%);width:' + lw + 'px;text-align:center;font-size:' + fs + 'px;line-height:1.15;font-weight:900;' +
-      'letter-spacing:.3px;text-transform:uppercase;color:' + (gold ? '#ffe98a' : '#fff') + ';' +
-      'text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6);transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' +
+    const tf = flip
+      ? 'rotate(' + (ang + 90) + 'deg) translate(-' + rOut + 'px,-50%)'
+      : 'rotate(' + (ang - 90) + 'deg) translateY(-50%)';
+    labels += '<div class="wrLbl" style="position:absolute;left:' + R + 'px;top:' + R + 'px;width:' + rOut + 'px;' +
+      'box-sizing:border-box;' + (flip ? 'padding-right:' : 'padding-left:') + rIn + 'px;transform-origin:0 0;transform:' + tf + ';' +
+      'text-align:center;font-size:' + fs + 'px;line-height:1.1;font-weight:900;letter-spacing:.3px;text-transform:uppercase;' +
+      'color:' + (gold ? '#ffe98a' : '#fff') + ';text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6);pointer-events:none;">' +
       _wrEsc(o.segs[i] || '') + '</div>';
   }
   const sepDeg = (360 / n).toFixed(4);
@@ -3201,8 +3215,7 @@ VIP.ui._renderDailyRoulette = function() {
   VIP.ui.casinoRouletteClose(true);
   const segs = VIP.ui._drSegments || [];
   const n = Math.max(1, segs.length);
-  const S = Math.max(240, Math.min(Math.floor(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.46)), 360));
-  const R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
+  const S = VIP.ui._wheelSize();
   const fs = S >= 320 ? (n > 5 ? 13 : 16) : 12;
   const ov = document.createElement('div');
   ov.id = 'wrOverlay';
@@ -3210,7 +3223,7 @@ VIP.ui._renderDailyRoulette = function() {
     // justify-content:center RECORTABA la parte de arriba en pantallas cortas
     // (bug de flex+overflow) → top-aligned con padding; scroll táctil iOS (#261).
     'align-items:center;padding:calc(26px + env(safe-area-inset-top,0px)) 16px calc(26px + env(safe-area-inset-bottom,0px));' +
-    'box-sizing:border-box;font-family:inherit;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
+    'box-sizing:border-box;font-family:inherit;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
   ov.innerHTML =
     '<button type="button" onclick="VIP.ui.casinoRouletteClose()" aria-label="Cerrar" ' +
       'style="position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);' +
@@ -3248,11 +3261,6 @@ VIP.ui.casinoDailySpin = function() {
       const segMid = (360 / n) * idx + (360 / n) / 2;
       const target = 360 * 5 + (360 - segMid);
       if (wheel) wheel.style.transform = 'rotate(' + target + 'deg)';
-      try {
-        document.querySelectorAll('#wrWheel .wrLbl').forEach(function(el) {
-          el.style.transform = 'translate(-50%,-50%) rotate(' + (-target) + 'deg)';
-        });
-      } catch (e) {}
       setTimeout(function() {
         const p = res.d.prize || {};
         VIP.ui._playChime();
@@ -3550,12 +3558,6 @@ VIP.ui.casinoRouletteSpin = function() {
       const segMid = (360 / n) * idx + (360 / n) / 2;
       const target = 360 * 5 + (360 - segMid);
       if (wheel) wheel.style.transform = 'rotate(' + target + 'deg)';
-      // Las etiquetas contra-rotan lo mismo → quedan derechas al parar.
-      try {
-        document.querySelectorAll('#wrWheel .wrLbl').forEach(function(el) {
-          el.style.transform = 'translate(-50%,-50%) rotate(' + (-target) + 'deg)';
-        });
-      } catch (e) {}
       setTimeout(function() {
         const p = res.d.prize || {};
         VIP.ui._playChime();
