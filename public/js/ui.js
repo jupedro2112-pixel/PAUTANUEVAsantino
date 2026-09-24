@@ -3043,6 +3043,97 @@ function _rwCountdown(iso) {
     return (h > 0 ? h + ' h ' : '') + m + ' min';
   } catch (e) { return '—'; }
 }
+// #298: REEMBOLSOS POR PERÍODO (diario/semanal/mensual, #297) dentro del hub.
+// Cuando el cashback instantáneo está APAGADO, la tarjeta "Tu Reembolso" ya no
+// dice "muy pronto": muestra los tres reembolsos con su monto y el botón de
+// reclamar (usa /api/refunds/status y /api/refunds/claim/{type}, mismos que el
+// dashboard viejo). Si el status todavía no se cargó, lo pide y re-pinta.
+function _rwUntil(iso) {
+  try {
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return 'ya';
+    const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    if (d > 0) return d + ' d ' + h + ' h';
+    return (h > 0 ? h + ' h ' : '') + m + ' min';
+  } catch (e) { return '—'; }
+}
+function _rwPeriodRefundsBody() {
+  const st = VIP.state.refundStatus;
+  if (!st) {
+    if (!VIP.ui._rwRefFetching && VIP.refunds && VIP.refunds.loadRefundStatus) {
+      VIP.ui._rwRefFetching = true;
+      VIP.refunds.loadRefundStatus().then(function() {
+        VIP.ui._rwRefFetching = false;
+        if (document.getElementById('rwHubOverlay')) {
+          const ovh = document.getElementById('rwHubOverlay'); const stp = ovh ? ovh.scrollTop : 0;
+          try { VIP.ui.openRewardsHub(); } catch (e) {}
+          const ov2 = document.getElementById('rwHubOverlay'); if (ov2) ov2.scrollTop = stp;
+        }
+      }).catch(function() { VIP.ui._rwRefFetching = false; });
+    }
+    return '<div style="font-size:13px;color:#cfd6de;text-align:center;padding:8px 0;">⏳ Calculando tus reembolsos…</div>';
+  }
+  const rows = [
+    { key: 'daily', icon: '☀️', label: 'Diario', sub: 'lo que perdiste ayer', color: '#ffd479' },
+    { key: 'weekly', icon: '📆', label: 'Semanal', sub: 'semana pasada · lun y mar', color: '#c39bff' },
+    { key: 'monthly', icon: '🗓️', label: 'Mensual', sub: 'mes pasado · desde el día 7', color: '#ff8a80' }
+  ];
+  let html = '';
+  rows.forEach(function(r) {
+    const d = st[r.key];
+    if (!d) return;
+    if (r.key === 'daily' && d.enabled === false) return;
+    const amt = Number(d.potentialAmount) || 0;
+    const ok = d.canClaim && amt > 0 && !d.belowMinimum;
+    let status;
+    if (ok) status = '<span style="color:#26e07f;font-weight:800;">¡Listo para reclamar!</span>';
+    else if (amt > 0 && d.belowMinimum) status = 'Mínimo para cobrar ' + _rwFmt(d.minAmount) + (r.key === 'daily' ? ' · entra en el semanal' : '');
+    else if (amt <= 0 && d.alreadyRefunded > 0 && d.netAmount > 0) status = '<span style="color:#7fe07f;">✅ Ya reembolsado (' + _rwFmt(d.alreadyRefunded) + ')</span>';
+    else if (amt <= 0) status = 'Sin pérdida en el período';
+    else if (d.nextClaim) status = '⏰ Disponible en ' + _rwUntil(d.nextClaim);
+    else status = 'No disponible ahora';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(255,255,255,0.07);">' +
+      '<span style="font-size:20px;flex:none;">' + r.icon + '</span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:13px;font-weight:900;color:#fff;">' + r.label + ' <span style="font-size:10.5px;font-weight:700;color:' + r.color + ';">' + (d.percentage || 0) + '%</span></div>' +
+        '<div style="font-size:10.5px;color:#9aa4b0;">' + r.sub + '</div>' +
+        '<div style="font-size:11px;color:#b7c0ca;margin-top:2px;">' + status + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;flex:none;">' +
+        '<div style="font-size:17px;font-weight:900;color:' + (ok ? '#4dd0ff' : '#5a6672') + ';">' + _rwFmt(amt) + '</div>' +
+        (ok ? '<button type="button" onclick="VIP.ui._rwClaimRefund(\'' + r.key + '\')" style="margin-top:4px;border:none;cursor:pointer;background:linear-gradient(135deg,#4dd0ff,#1e88e5);color:#00223a;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:900;">💸 Reclamar</button>' : '') +
+      '</div>' +
+    '</div>';
+  });
+  return html || '<div style="font-size:13px;color:#9aa4b0;">Por ahora no hay reembolsos activos.</div>';
+}
+VIP.ui._rwClaimRefund = function(type) {
+  if (VIP.ui._rwClaiming) return;
+  VIP.ui._rwClaiming = true;
+  fetch(`${VIP.config.API_URL}/api/refunds/claim/${type}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${VIP.state.currentToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    VIP.ui._rwClaiming = false;
+    if (d && d.success) {
+      VIP.ui.showToast('🎉 ' + (d.message || 'Reembolso acreditado'), 'success');
+      try { VIP.ui._playChime(); } catch (e) {}
+    } else {
+      VIP.ui.showToast((d && d.message) || 'No se pudo reclamar', 'error');
+    }
+    if (VIP.refunds && VIP.refunds.loadRefundStatus) {
+      VIP.refunds.loadRefundStatus().then(function() {
+        if (document.getElementById('rwHubOverlay')) {
+          const ovh = document.getElementById('rwHubOverlay'); const stp = ovh ? ovh.scrollTop : 0;
+          try { VIP.ui.openRewardsHub(); } catch (e) {}
+          const ov2 = document.getElementById('rwHubOverlay'); if (ov2) ov2.scrollTop = stp;
+        }
+      }).catch(function() {});
+    }
+  }).catch(function() { VIP.ui._rwClaiming = false; VIP.ui.showToast('Error de conexión', 'error'); });
+};
+
 function _rwCard(opts) {
   // Tarjeta del hub: ícono + título + estado + CTA. Diseño oscuro con acento.
   const acc = opts.accent || '#ffd700';
@@ -3165,8 +3256,10 @@ VIP.ui.openRewardsHub = function() {
     // UNA sola idea, sin jerga (owner 2026-09-03): "esto es TU reembolso, lo
     // tocás y entra YA". El monto grande siempre visible (aunque sea $0).
     if (!cb.enabled) {
-      body = '<div style="font-size:13px;color:#9aa4b0;">Un reembolso de lo que perdés jugando, al instante. 🔒 Disponible muy pronto.</div>';
-      cta = _rwCta('🔒 Muy pronto', '', false, '#4dd0ff');
+      // #298: sin cashback instantáneo → los reembolsos por período (diario /
+      // semanal / mensual) viven acá, con reclamo directo.
+      body = _rwPeriodRefundsBody();
+      cta = '';
     } else if (cb.unavailable) {
       body = '<div style="font-size:13px;color:#cfd6de;">No pudimos calcular tu reembolso ahora. Probá en unos minutos.</div>';
     } else {
@@ -3183,7 +3276,7 @@ VIP.ui.openRewardsHub = function() {
       if (ok) cta = _rwCta('💸 RECLAMAR ' + _rwFmt(cb.reclamable) + ' AHORA', 'VIP.ui.casinoCashbackClaim()', true, '#4dd0ff');
     }
     body = _cbLive + body;
-    cards += _rwCard({ icon: '💸', accent: '#4dd0ff', title: 'Tu Reembolso', subtitle: cb.enabled ? ('El ' + (cb.pct || 0) + '% de lo que perdés vuelve a tu saldo') : 'Recuperá parte de lo que perdés', body: body, cta: cta });
+    cards += _rwCard({ icon: '💸', accent: '#4dd0ff', title: cb.enabled ? 'Tu Reembolso' : 'Tus Reembolsos', subtitle: cb.enabled ? ('El ' + (cb.pct || 0) + '% de lo que perdés vuelve a tu saldo') : 'Diario, semanal y mensual — sobre lo que perdés jugando', body: body, cta: cta });
   }
 
   // --- ℹ️ SECCIÓN INFORMACIÓN (#257d): reembolso + rollover explicado todo
@@ -3211,12 +3304,24 @@ VIP.ui.openRewardsHub = function() {
         '<div style="display:' + (open ? 'block' : 'none') + ';padding:0 0 8px;">' + body + '</div>' +
       '</div>';
     };
-    const secReembolso =
+    const _rs = VIP.state.refundStatus || {};
+    const _pctTxt = function(k) { const t = _rs[k] && _rs[k].tier; return t ? ('hasta el ' + t.pct + '%') : ''; };
+    const secReembolso = (cb && cb.enabled) ? (
       li('🔄', 'Te devolvemos el <b style="color:#fff;">' + iPct + '%</b> de lo que perdés jugando. Se va <b style="color:#fff;">juntando solo</b> y <b style="color:#fff;">no se vence</b>.') +
       li('👆', 'Lo reclamás <b style="color:#fff;">cuando quieras</b>' + (iMin > 0 ? ' (desde ' + _rwFmt(iMin) + ')' : '') + ' o seguís juntándolo — vos elegís.') +
       (iMax > 0 ? li('📅', 'Tope: podés reclamar hasta <b style="color:#fff;">' + _rwFmt(iMax) + ' por día</b>.') : '') +
       li('⚽', '<b style="color:#ff8a80;">DEPORTES NO genera reembolso</b>: solo cuenta lo que jugás en <b style="color:#26e07f;">slots y casino</b>.') +
-      li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b> y podés jugarlo al instante.');
+      li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b> y podés jugarlo al instante.')
+    ) : (
+      // #298: reembolsos por período (#297).
+      li('☀️', '<b style="color:#fff;">Diario:</b> todos los días reclamás lo que perdiste <b style="color:#fff;">ayer</b>. Día por día: lo de ayer no depende de otros días.') +
+      li('📆', '<b style="color:#fff;">Semanal:</b> lunes y martes reclamás la pérdida de la <b style="color:#fff;">semana pasada</b> (se restan tus ganancias de esa semana).') +
+      li('🗓️', '<b style="color:#fff;">Mensual:</b> desde el día 7 reclamás la pérdida del <b style="color:#fff;">mes pasado</b>.') +
+      li('1️⃣', 'Cada pérdida se reembolsa <b style="color:#fff;">una sola vez</b>: lo que ya cobraste con el diario se descuenta del semanal, y lo del diario y semanal, del mensual. Si un día no reclamás el diario, no lo perdés: entra en el semanal.') +
+      li('📈', 'Cuanto más perdés en el período, mayor el %. Tocá tu USUARIO en la app para ver la escala completa.') +
+      li('⚽', '<b style="color:#ff8a80;">DEPORTES NO genera reembolso</b>: solo cuenta lo que jugás en <b style="color:#26e07f;">slots y casino</b>.') +
+      li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b>.')
+    );
     const secRollover =
       li('🎯', 'Para <b style="color:#fff;">RETIRAR</b> un bonus, primero tenés que <b style="color:#fff;">apostarlo la cantidad de veces que indica</b>. ' +
         (iRoll > 0

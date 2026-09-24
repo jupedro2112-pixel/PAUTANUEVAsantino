@@ -8,6 +8,16 @@
 
 ## Sesión 2026-09-24
 
+### 298. Hub PREMIOS: "Tus Reembolsos" (diario / semanal / mensual) cuando el cashback está apagado
+- Owner apagó el cashback instantáneo y el hub decía "🔒 Muy pronto". Ahora, con el
+  cashback apagado, la tarjeta pasa a **"Tus Reembolsos"**: tres filas (☀️ Diario, 📆
+  Semanal, 🗓️ Mensual) con %, monto, estado ("¡Listo para reclamar!", "Disponible en
+  X", "✅ Ya reembolsado", "Mínimo para cobrar $X", "Sin pérdida") y botón **💸
+  Reclamar** directo (`VIP.ui._rwClaimRefund` → `/api/refunds/claim/{type}`, toast +
+  re-render). Usa `VIP.state.refundStatus` (`VIP.refunds.loadRefundStatus()` si falta;
+  `_rwPeriodRefundsBody`). INFORMACIÓN → "Cómo funciona tu reembolso" explica la regla
+  de los tres períodos en ese modo. Con cashback encendido no cambia nada. SW → v178.
+
 ### 297. Reembolso DIARIO de vuelta + semanal/mensual descuentan lo ya reembolsado (anti "reembolso de reembolso")
 - Decisión del owner (charla del 2026-09-24, tras evaluar el modelo "compensado"):
   **diario = la pérdida de AYER, día por día, sin mirar lo previo** (el cliente que
