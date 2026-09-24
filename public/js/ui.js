@@ -1555,8 +1555,14 @@ VIP.ui._showCasinoFrame = function() {
       // Sin borde (owner 2026-08-21: "sacá esas líneas blancas") — solo sombra.
       'flex-direction:column;background:#0d0d1a;border:none;' +
       'border-radius:16px;overflow:hidden;box-shadow:0 14px 44px rgba(0,0,0,0.6);">' +
+        // #300: AGARRE para agrandar/achicar el widget (arrastrar arriba = más
+        // alto, abajo = más bajo; doble toque = tamaño original). Vive arriba
+        // del header; touch-action:none para que el dedo no scrollee la página.
+        '<div id="casinoDrawerGrip" title="Arrastrá para agrandar o achicar" style="flex:0 0 auto;height:16px;display:flex;align-items:center;justify-content:center;' +
+        'background:linear-gradient(135deg,#128c4a,#0f7a3d);cursor:ns-resize;touch-action:none;user-select:none;-webkit-user-select:none;">' +
+        '<div style="width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,0.55);"></div></div>' +
         // Header verde con "EN LÍNEA" + cerrar.
-        '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;flex:0 0 auto;' +
+        '<div style="display:flex;align-items:center;gap:10px;padding:6px 12px 10px;flex:0 0 auto;' +
         'background:linear-gradient(135deg,#128c4a,#0f7a3d);">' +
           // En modo soporte este círculo muestra la FOTO del logo (misma que
           // la cabecera del chat, configurable desde el panel); en asistente, 🎧.
@@ -1888,10 +1894,55 @@ VIP.ui._showBubbleDragHintOnce = function() {
 };
 
 /** Abre el panel en modo asistente (o como estaba si el soporte quedó activo). */
+// #300: redimensionar el widget arrastrando el agarre de arriba. Alto guardado
+// en localStorage (vip_widget_h) y re-aplicado al abrir. Límites: 260px …
+// alto de la pantalla − 40px. Doble toque en el agarre = volver al default.
+VIP.ui._drawerMaxH = function() { return Math.max(260, window.innerHeight - 40); };
+VIP.ui._applyDrawerHeight = function(drawer) {
+  let h = 0;
+  try { h = parseInt(localStorage.getItem('vip_widget_h') || '0', 10) || 0; } catch (e) {}
+  if (h > 0) drawer.style.height = Math.min(VIP.ui._drawerMaxH(), Math.max(260, h)) + 'px';
+};
+VIP.ui._initDrawerResize = function(drawer) {
+  const grip = document.getElementById('casinoDrawerGrip');
+  if (!grip || grip.dataset.rs) return;
+  grip.dataset.rs = '1';
+  let startY = 0, startH = 0, active = false;
+  const onMove = function(e) {
+    if (!active) return;
+    const y = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : startY);
+    const h = Math.min(VIP.ui._drawerMaxH(), Math.max(260, startH + (startY - y)));
+    drawer.style.height = h + 'px';
+    if (e.cancelable) e.preventDefault();
+  };
+  const onEnd = function() {
+    if (!active) return;
+    active = false;
+    try { localStorage.setItem('vip_widget_h', String(drawer.offsetHeight)); } catch (e) {}
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onEnd);
+    window.removeEventListener('pointercancel', onEnd);
+  };
+  grip.addEventListener('pointerdown', function(e) {
+    active = true; startY = e.clientY; startH = drawer.offsetHeight;
+    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    if (e.cancelable) e.preventDefault();
+  });
+  grip.addEventListener('dblclick', function() {
+    drawer.style.height = '';
+    try { localStorage.removeItem('vip_widget_h'); } catch (e) {}
+  });
+};
+
 VIP.ui.openCasinoChat = function() {
   const drawer = document.getElementById('casinoChatDrawer');
   if (!drawer) return;
   drawer.style.display = 'flex';
+  VIP.ui._initDrawerResize(drawer); // #300
+  VIP.ui._applyDrawerHeight(drawer);
   // Anclar el panel al MISMO CUADRANTE que la burbuja (lado izq/der + mitad
   // arriba/abajo) para que abra "desde" donde está, y OCULTAR la burbuja mientras
   // el panel está abierto → el chat nunca la tapa (se cierra con la ✕). Se lee el
@@ -2252,6 +2303,11 @@ VIP.ui._setActiveTab = function(key) {
 VIP.ui.casinoBotGo = function(state) {
   const area = document.getElementById('casinoBotArea');
   if (!area) return;
+  // #300: qué había abierto ANTES (se captura antes de restaurar el chat / pisar
+  // _botState) — tocar "Depositar" de nuevo estando en la carga con agente o en
+  // la tarjeta del CBU vuelve a la elección de modo.
+  const _wasManualChat = !!document.getElementById('casinoManualBar');
+  const _prevState = VIP.ui._botState;
   // #299: pestaña activa según el estado.
   VIP.ui._setActiveTab(
     (state === 'deposit' || state === 'deposit-mode' || state === 'receipt' || state === 'receipt-sent') ? 'deposit' :
@@ -2363,6 +2419,11 @@ VIP.ui.casinoBotGo = function(state) {
     // #295: según el modo elegido. Sin elegir → pantalla de elección.
     const mode = VIP.ui._depositMode();
     if (!mode) { VIP.ui.casinoBotGo('deposit-mode'); return; }
+    // #300: segundo toque en "Depositar" = volver a elegir entre las 2 formas.
+    if ((mode === 'manual' && _wasManualChat) || (mode === 'auto' && _prevState === 'deposit' && document.getElementById('botDepositCard'))) {
+      VIP.ui.casinoBotGo('deposit-mode');
+      return;
+    }
     if (mode === 'manual') { VIP.ui.casinoBotManualDeposit(); return; }
     // #299: pestaña propia — solo lo de depositar (antes se apilaba debajo del
     // saludo + "Mis datos" y al scrollear aparecía el usuario arriba del CBU).

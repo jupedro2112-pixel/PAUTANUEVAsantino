@@ -8,6 +8,17 @@
 
 ## Sesión 2026-09-24
 
+### 300. Widget redimensionable + "Depositar" de nuevo vuelve a elegir el modo
+- **Agarre** (`#casinoDrawerGrip`, barra con pastilla arriba del header verde): arrastrar
+  hacia arriba agranda el widget, hacia abajo lo achica (260px … alto de pantalla − 40);
+  doble toque = tamaño original. Pointer events (touch + mouse), `touch-action:none`.
+  Alto guardado en `localStorage.vip_widget_h` y re-aplicado en `openCasinoChat`
+  (`_initDrawerResize` / `_applyDrawerHeight`).
+- Tocar **Quiero Depositar** estando ya en la carga con agente (chat montado con
+  `#casinoManualBar`) o en la tarjeta del CBU vuelve a la pantalla de elección
+  (`deposit-mode`) en vez de recargar el chat. Se captura `_wasManualChat`/`_prevState`
+  al inicio de `casinoBotGo` (antes de restaurar el chat). SW → v180. Solo front.
+
 ### 299. Widget: la opción abierta se nota (pestaña activa) y Depositar es pestaña propia
 - Owner: "que se diferencie según el recuadro que se elija… que en soporte se note
   seleccionado… y que cada uno tenga su pestaña: pongo depositar y arriba aparece mi
