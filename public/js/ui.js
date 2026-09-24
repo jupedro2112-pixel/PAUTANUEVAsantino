@@ -2076,32 +2076,59 @@ VIP.ui._botRow = function(btnsHtml) {
 /** Recuadro "TUS DATOS DE INGRESO" del inicio del asistente (#255). Renderiza
  *  al toque con lo que se sabe y completa la clave cuando responde el server
  *  (cacheado por sesión). Copiar con un toque. */
+// Pinta (o repinta) el cuerpo del recuadro de datos. Expuesto para que auth.js
+// lo llame al cambiar la contraseña (#291): la clave nueva aparece al instante.
+VIP.ui._paintCredsBox = function() {
+  const u = (VIP.state.currentUser && VIP.state.currentUser.username) || '';
+  const el = document.getElementById('credsBoxBody');
+  if (!el || !u) return;
+  const pass = VIP.state.sessionPassword || VIP.ui._credsDefaultPass || null;
+  const pill = function(v) {
+    return '<b style="font-size:15px;letter-spacing:0.4px;color:#ffd700;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.35);' +
+      'border-radius:8px;padding:2px 8px;">' + _wrEsc(v) + '</b>';
+  };
+  const copy = function(v) {
+    return '<button type="button" onclick="VIP.ui._copyCred(\'' + _wrEsc(v) + '\')" ' +
+      'style="background:linear-gradient(135deg,#f5d16a,#c99a2e);color:#1a1200;border:none;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:900;cursor:pointer;">📋 copiar</button>';
+  };
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;">' +
+      '<span class="cwLbl" style="font-size:12px;">👤 Usuario:</span>' + pill(u) + copy(u) +
+    '</div>' +
+    (pass
+      ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
+          '<span class="cwLbl" style="font-size:12px;">🔑 Clave:</span>' + pill(pass) + copy(pass) +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;flex-wrap:wrap;">' +
+          '<span class="cwLbl" style="font-size:10.5px;">Guardalos para volver a entrar. 🙌</span>' +
+          '<button type="button" onclick="VIP.ui._credsChangePwd()" style="background:none;border:1px solid rgba(212,175,55,0.5);color:#ffd700;' +
+            'border-radius:8px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;">🔑 Cambiar contraseña</button>' +
+        '</div>'
+      : '<div style="margin-top:4px;"><span class="cwLbl" style="font-size:12px;">🔑 Clave:</span> ' +
+          '<span style="font-size:12px;">la que elegiste al crear tu cuenta. ¿La olvidaste? Tocá <b>🎧 Soporte</b> y te la cambiamos al toque.</span>' +
+          '<div style="margin-top:6px;"><button type="button" onclick="VIP.ui._credsChangePwd()" style="background:none;border:1px solid rgba(212,175,55,0.5);color:#ffd700;' +
+            'border-radius:8px;padding:4px 9px;font-size:11px;font-weight:800;cursor:pointer;">🔑 Cambiar contraseña</button></div></div>');
+};
+// Cambiar contraseña desde "Mis datos" (#291): mismo modal que Configuración,
+// en modo voluntario. El modal se pone por ENCIMA del casino (z 99999) para
+// que no quede tapado.
+VIP.ui._credsChangePwd = function() {
+  try {
+    VIP.state.passwordChangePending = false;
+    if (VIP.auth && typeof VIP.auth.prepareChangePasswordModal === 'function') VIP.auth.prepareChangePasswordModal();
+    const m = document.getElementById('changePasswordModal');
+    if (m) m.style.zIndex = '2147483005';
+    VIP.ui.showModal('changePasswordModal');
+  } catch (e) {}
+};
 VIP.ui._renderCredsBox = function() {
   const u = (VIP.state.currentUser && VIP.state.currentUser.username) || '';
   if (!u) return;
-  const paint = function() {
-    const el = document.getElementById('credsBoxBody');
-    if (!el) return;
-    const pass = VIP.state.sessionPassword || VIP.ui._credsDefaultPass || null;
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
-        '<span class="cwLbl" style="font-size:12px;">👤 Usuario:</span>' +
-        '<b style="font-size:15px;letter-spacing:0.3px;">' + _wrEsc(u) + '</b>' +
-        '<button type="button" class="cwSec" onclick="VIP.ui._copyCred(\'' + _wrEsc(u) + '\')" ' +
-          'style="border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">📋 copiar</button>' +
-      '</div>' +
-      (pass
-        ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">' +
-            '<span class="cwLbl" style="font-size:12px;">🔑 Clave:</span>' +
-            '<b style="font-size:15px;letter-spacing:0.3px;">' + _wrEsc(pass) + '</b>' +
-            '<button type="button" class="cwSec" onclick="VIP.ui._copyCred(\'' + _wrEsc(pass) + '\')" ' +
-              'style="border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">📋 copiar</button>' +
-          '</div>' +
-          '<div class="cwLbl" style="font-size:10.5px;margin-top:5px;">Guardalos para volver a entrar cuando quieras. 🙌</div>'
-        : '<div style="margin-top:4px;"><span class="cwLbl" style="font-size:12px;">🔑 Clave:</span> ' +
-            '<span style="font-size:12px;">la que elegiste al crear tu cuenta. ¿La olvidaste? Tocá <b>🎧 Soporte</b> y te la cambiamos al toque.</span></div>');
-  };
-  VIP.ui._botMsg('<div><b style="font-size:13px;">🪪 TUS DATOS DE INGRESO</b><div id="credsBoxBody"></div></div>');
+  const paint = VIP.ui._paintCredsBox;
+  // Recuadro DORADO (#291, owner: "está muy apagado") — mismo tamaño, más presencia.
+  VIP.ui._botMsg('<div style="margin:-4px -6px;padding:8px 10px;border-radius:10px;border:1px solid rgba(212,175,55,0.55);' +
+    'background:linear-gradient(135deg,rgba(212,175,55,0.16),rgba(212,175,55,0.04));box-shadow:0 0 14px rgba(212,175,55,0.15) inset;">' +
+    '<b style="font-size:13px;color:#ffd700;letter-spacing:.3px;">🪪 TUS DATOS DE INGRESO</b><div id="credsBoxBody"></div></div>');
   paint();
   // Completar la clave default desde el server (una vez por sesión).
   if (VIP.ui._credsFetched) return;
@@ -2678,25 +2705,6 @@ VIP.ui._renderRoulette = function() {
   const S = Math.max(240, Math.min(Math.floor(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.46)), 360));
   const R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
   const fs = S >= 320 ? 16 : (S >= 280 ? 14 : 12);
-  const colors = ['#128c4a', '#0f7a3d', '#1aa356', '#0c6234'];
-  let stops = '';
-  for (let i = 0; i < n; i++) {
-    const a0 = (360 / n) * i, a1 = (360 / n) * (i + 1);
-    stops += colors[i % colors.length] + ' ' + a0 + 'deg ' + a1 + 'deg' + (i < n - 1 ? ',' : '');
-  }
-  let labels = '';
-  for (let i = 0; i < n; i++) {
-    const ang = (360 / n) * i + (360 / n) / 2;
-    const rad = ang * Math.PI / 180;
-    // Radio ESCALONADO (owner 2026-09-03): las etiquetas vecinas alternan
-    // distancia al centro para no pegarse entre sí ("$1.000 GRATIS$500 GRATIS").
-    const ri = rr * (i % 2 === 0 ? 0.74 : 1.24);
-    const x = R + ri * Math.sin(rad), y = R - ri * Math.cos(rad);
-    labels += '<div class="wrLbl" style="position:absolute;left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;' +
-      'transform:translate(-50%,-50%);width:' + lw + 'px;text-align:center;font-size:' + fs + 'px;line-height:1.15;font-weight:900;' +
-      'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85);transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' +
-      _wrEsc(segs[i] || '') + '</div>';
-  }
   const ov = document.createElement('div');
   ov.id = 'wrOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.9);display:flex;flex-direction:column;' +
@@ -2710,14 +2718,8 @@ VIP.ui._renderRoulette = function() {
       'color:#fff;font-size:20px;font-weight:900;cursor:pointer;">✕</button>' +
     '<div style="color:#ffd700;font-size:22px;font-weight:900;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.6);">🎡 RULETA DE BIENVENIDA</div>' +
     '<div style="color:#fff;opacity:.85;font-size:14px;margin:4px 0 16px;text-align:center;">Girás una sola vez. ¡Suerte!</div>' +
-    '<div style="position:relative;width:' + S + 'px;height:' + S + 'px;margin-bottom:18px;flex:none;">' +
-      '<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);z-index:3;width:0;height:0;' +
-        'border-left:14px solid transparent;border-right:14px solid transparent;border-top:24px solid #ffd700;' +
-        'filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));"></div>' +
-      '<div id="wrWheel" style="width:' + S + 'px;height:' + S + 'px;border-radius:50%;position:relative;' +
-        'background:conic-gradient(' + stops + ');box-shadow:0 10px 34px rgba(0,0,0,.7),inset 0 0 0 5px #ffd700aa;' +
-        'transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' + labels + '</div>' +
-    '</div>' +
+    VIP.ui._wheelMarkup({ S: S, segs: segs, fs: fs, accent: '#ffd700', accent2: '#b8860b',
+      palette: ['#7a0b1f', '#0f3d2a', '#1a1a4a', '#5a3a00', '#2b0a3d', '#0b3d5a'] }) +
     '<div id="wrResult" style="color:#fff;text-align:center;font-size:15px;line-height:1.35;max-width:360px;"></div>' +
     '<div id="wrActions" style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px;margin-top:6px;">' +
       '<button type="button" id="wrSpinBtn" onclick="VIP.ui.casinoRouletteSpin()" ' +
@@ -2726,6 +2728,75 @@ VIP.ui._renderRoulette = function() {
     '</div>';
   document.body.appendChild(ov);
   VIP.ui._wrOverlayOpen = true;
+};
+
+// ============================================================
+// RUEDA PREMIUM (#291, owner: "parece una ruleta hecha en Paint"). Compartida
+// por las dos ruletas. Capas: aro dorado con "luces" (repeating-conic), gajos
+// con paleta rica + separadores finos + profundidad radial, brillo superior
+// fijo (no gira), cubo central con el logo (no gira) y puntero con pin. El
+// elemento que GIRA sigue siendo #wrWheel (el spin no cambió) y las etiquetas
+// .wrLbl siguen contra-rotando.
+// ============================================================
+VIP.ui._wheelMarkup = function(o) {
+  const S = o.S, n = Math.max(1, o.segs.length), R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
+  const fs = o.fs, pal = o.palette, acc = o.accent, acc2 = o.accent2;
+  let stops = '';
+  for (let i = 0; i < n; i++) {
+    const a0 = (360 / n) * i, a1 = (360 / n) * (i + 1);
+    stops += pal[i % pal.length] + ' ' + a0 + 'deg ' + a1 + 'deg' + (i < n - 1 ? ',' : '');
+  }
+  let labels = '';
+  for (let i = 0; i < n; i++) {
+    const ang = (360 / n) * i + (360 / n) / 2;
+    const rad = ang * Math.PI / 180;
+    const ri = rr * (i % 2 === 0 ? 0.74 : 1.24); // radio escalonado (#256f)
+    const x = R + ri * Math.sin(rad), y = R - ri * Math.cos(rad);
+    const gold = /\$/.test(o.segs[i] || '');
+    labels += '<div class="wrLbl" style="position:absolute;left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;' +
+      'transform:translate(-50%,-50%);width:' + lw + 'px;text-align:center;font-size:' + fs + 'px;line-height:1.15;font-weight:900;' +
+      'letter-spacing:.3px;text-transform:uppercase;color:' + (gold ? '#ffe98a' : '#fff') + ';' +
+      'text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6);transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' +
+      _wrEsc(o.segs[i] || '') + '</div>';
+  }
+  const sepDeg = (360 / n).toFixed(4);
+  const rim = Math.round(S * 0.055), hub = Math.round(S * 0.19);
+  if (!document.getElementById('wrPremiumCss')) {
+    const st = document.createElement('style'); st.id = 'wrPremiumCss';
+    st.textContent = '@keyframes wrGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(255,215,0,.35))}50%{filter:drop-shadow(0 0 18px rgba(255,215,0,.75))}}' +
+      '@keyframes wrLights{to{transform:rotate(30deg)}}';
+    document.head.appendChild(st);
+  }
+  return '<div style="position:relative;width:' + (S + rim * 2) + 'px;height:' + (S + rim * 2) + 'px;margin:6px auto 18px;flex:none;">' +
+    // Aro con luces (gira lento en sentido contrario, decorativo)
+    '<div style="position:absolute;inset:0;border-radius:50%;' +
+      'background:repeating-conic-gradient(from 0deg,' + acc + ' 0deg 4deg,#3a2c00 4deg 12deg);' +
+      'box-shadow:0 14px 40px rgba(0,0,0,.75),0 0 0 3px #2a1f00,0 0 0 5px ' + acc2 + ',inset 0 0 0 ' + Math.round(rim * 0.45) + 'px #1a1200;' +
+      'animation:wrLights 6s linear infinite alternate;"></div>' +
+    // Puntero (fijo) con pin
+    '<div style="position:absolute;top:' + (rim - 14) + 'px;left:50%;transform:translateX(-50%);z-index:6;width:0;height:0;' +
+      'border-left:15px solid transparent;border-right:15px solid transparent;border-top:30px solid ' + acc + ';' +
+      'filter:drop-shadow(0 3px 4px rgba(0,0,0,.7));animation:wrGlow 1.6s ease-in-out infinite;"></div>' +
+    '<div style="position:absolute;top:' + (rim - 22) + 'px;left:50%;transform:translateX(-50%);z-index:7;width:16px;height:16px;border-radius:50%;' +
+      'background:radial-gradient(circle at 35% 35%,#fff,' + acc + ' 55%,#5a4300);box-shadow:0 2px 6px rgba(0,0,0,.7);"></div>' +
+    // Rueda (GIRA)
+    '<div id="wrWheel" style="position:absolute;left:' + rim + 'px;top:' + rim + 'px;width:' + S + 'px;height:' + S + 'px;border-radius:50%;' +
+      'background:' +
+        'repeating-conic-gradient(from 0deg,rgba(255,255,255,.55) 0deg 0.5deg,transparent 0.5deg ' + sepDeg + 'deg),' +
+        'radial-gradient(circle at 50% 50%,rgba(255,255,255,.14) 0%,rgba(255,255,255,0) 45%,rgba(0,0,0,.45) 100%),' +
+        'conic-gradient(' + stops + ');' +
+      'box-shadow:inset 0 0 0 2px rgba(0,0,0,.5),inset 0 0 40px rgba(0,0,0,.55);' +
+      'transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' + labels + '</div>' +
+    // Brillo superior (fijo, no gira)
+    '<div style="position:absolute;left:' + rim + 'px;top:' + rim + 'px;width:' + S + 'px;height:' + S + 'px;border-radius:50%;pointer-events:none;z-index:4;' +
+      'background:radial-gradient(ellipse at 50% 18%,rgba(255,255,255,.22) 0%,rgba(255,255,255,.05) 35%,rgba(255,255,255,0) 60%);"></div>' +
+    // Cubo central con logo (fijo)
+    '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:' + hub + 'px;height:' + hub + 'px;border-radius:50%;' +
+      'background:radial-gradient(circle at 35% 30%,#fff3b0,' + acc + ' 45%,#6b4f00 100%);' +
+      'box-shadow:0 4px 14px rgba(0,0,0,.7),inset 0 -3px 8px rgba(0,0,0,.35),0 0 0 3px #1a1200;display:flex;align-items:center;justify-content:center;">' +
+      '<img src="/images/soporte-1girox.png" alt="" style="width:' + Math.round(hub * 0.66) + 'px;height:' + Math.round(hub * 0.66) + 'px;border-radius:50%;object-fit:cover;border:2px solid rgba(0,0,0,.35);">' +
+    '</div>' +
+  '</div>';
 };
 
 /** Cierra el overlay de la ruleta. Si no es un cierre "silencioso", vuelve al
@@ -2743,6 +2814,17 @@ VIP.ui.casinoRouletteClose = function(silent) {
 // 🎁 HUB DE PREMIOS (#254) — ruleta de bienvenida + ruleta diaria + cashback
 // instantáneo en un overlay propio, fuera del chat.
 // ============================================================
+// #291: estado del acordeón de INFORMACIÓN + toggle (re-pinta el hub).
+VIP.ui._rwInfoOpen = {};
+VIP.ui._rwInfoToggle = function(key) {
+  VIP.ui._rwInfoOpen[key] = !VIP.ui._rwInfoOpen[key];
+  const ov = document.getElementById('rwHubOverlay');
+  const st = ov ? ov.scrollTop : 0;
+  try { VIP.ui.openRewardsHub(); } catch (e) {}
+  const ov2 = document.getElementById('rwHubOverlay');
+  if (ov2) ov2.scrollTop = st;
+};
+
 VIP.ui._refreshRewards = function() {
   if (!VIP.state.currentToken) return; // invitado: sin premios
   // #290: el botón 🎁 PREMIOS se ve SIEMPRE (antes dependía de que el resumen
@@ -2799,9 +2881,9 @@ function _wrBonusRuleTxt(pct) {
   return parts.length ? '<div style="font-size:12px;opacity:.85;margin-top:8px;line-height:1.45;">🎁 <b>Cómo funciona:</b> ' + parts.join(' ') + '</div>' : '';
 }
 // #285: bloque "🎁 BONOS" del recuadro INFORMACIÓN — reglas reales del panel.
-function _rwBonusRulesHtml(br, li) {
+function _rwBonusRulesHtml(br, li, bodyOnly) {
   if (!br) return '';
-  var out = '<div style="font-size:11px;font-weight:900;color:#26e07f;letter-spacing:0.5px;margin:12px 0 6px;">🎁 CÓMO FUNCIONAN LOS BONOS</div>';
+  var out = bodyOnly ? '' : '<div style="font-size:11px;font-weight:900;color:#26e07f;letter-spacing:0.5px;margin:12px 0 6px;">🎁 CÓMO FUNCIONAN LOS BONOS</div>';
   if (br.firstChargeEnabled && br.firstChargePct > 0) {
     out += li('💳', 'En tu <b style="color:#fff;">PRIMERA carga</b> te sumamos un <b style="color:#26e07f;">' + br.firstChargePct + '% EXTRA</b>, automático.');
   }
@@ -2980,22 +3062,38 @@ VIP.ui.openRewardsHub = function() {
         '<span style="flex:none;font-size:14px;">' + emoji + '</span>' +
         '<span style="font-size:12px;color:#b7c0ca;line-height:1.55;">' + html + '</span></div>';
     };
-    cards += '<div style="background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:14px 16px;">' +
-      '<div style="font-size:13.5px;font-weight:900;color:#fff;margin-bottom:10px;">ℹ️ INFORMACIÓN — Reembolso y Rollover</div>' +
-      '<div style="font-size:11px;font-weight:900;color:#4dd0ff;letter-spacing:0.5px;margin-bottom:6px;">💸 CÓMO FUNCIONA TU REEMBOLSO</div>' +
+    // #291: ACORDEÓN — cada tema cerrado por defecto; se abre/cierra al tocar
+    // (estado en VIP.ui._rwInfoOpen para sobrevivir al re-render del hub).
+    const sec = function(key, color, title, body) {
+      const open = !!(VIP.ui._rwInfoOpen && VIP.ui._rwInfoOpen[key]);
+      return '<div style="border-top:1px solid rgba(255,255,255,0.08);">' +
+        '<button type="button" onclick="VIP.ui._rwInfoToggle(\'' + key + '\')" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;' +
+          'background:none;border:none;padding:11px 0;cursor:pointer;text-align:left;">' +
+          '<span style="font-size:11.5px;font-weight:900;color:' + color + ';letter-spacing:0.5px;">' + title + '</span>' +
+          '<span style="color:#9aa4b0;font-size:13px;transition:transform .2s;transform:rotate(' + (open ? 90 : 0) + 'deg);">▶</span>' +
+        '</button>' +
+        '<div style="display:' + (open ? 'block' : 'none') + ';padding:0 0 8px;">' + body + '</div>' +
+      '</div>';
+    };
+    const secReembolso =
       li('🔄', 'Te devolvemos el <b style="color:#fff;">' + iPct + '%</b> de lo que perdés jugando. Se va <b style="color:#fff;">juntando solo</b> y <b style="color:#fff;">no se vence</b>.') +
       li('👆', 'Lo reclamás <b style="color:#fff;">cuando quieras</b>' + (iMin > 0 ? ' (desde ' + _rwFmt(iMin) + ')' : '') + ' o seguís juntándolo — vos elegís.') +
       (iMax > 0 ? li('📅', 'Tope: podés reclamar hasta <b style="color:#fff;">' + _rwFmt(iMax) + ' por día</b>.') : '') +
       li('⚽', '<b style="color:#ff8a80;">DEPORTES NO genera reembolso</b>: solo cuenta lo que jugás en <b style="color:#26e07f;">slots y casino</b>.') +
-      li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b> y podés jugarlo al instante.') +
-      '<div style="font-size:11px;font-weight:900;color:#ffd700;letter-spacing:0.5px;margin:12px 0 6px;">🔒 ¿QUÉ ES EL ROLLOVER?</div>' +
+      li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b> y podés jugarlo al instante.');
+    const secRollover =
       li('🎯', 'Para <b style="color:#fff;">RETIRAR</b> un bonus, primero tenés que <b style="color:#fff;">apostarlo la cantidad de veces que indica</b>. ' +
         (iRoll > 0
           ? 'Acá es <b style="color:#ffd700;">x' + iRoll + '</b>: reclamás $1.000 → apostás $' + (1000 * iRoll).toLocaleString('es-AR') + ' y lo retirás sin problema.'
           : 'Ej.: <b style="color:#ffd700;">x2</b> = reclamás $1.000 → apostás $2.000 y lo retirás sin problema.')) +
       li('🎰', 'El rollover se completa con <b style="color:#26e07f;">cualquier apuesta</b>: slots, casino en vivo y también <b style="color:#26e07f;">deportes</b>.') +
-      li('💡', 'Mientras completás el rollover, la plata está en tu saldo y jugás normal. Solo afecta el momento de retirar.') +
-      _rwBonusRulesHtml(d.bonusRules, li) +
+      li('💡', 'Mientras completás el rollover, la plata está en tu saldo y jugás normal. Solo afecta el momento de retirar.');
+    const secBonos = _rwBonusRulesHtml(d.bonusRules, li, true);
+    cards += '<div style="background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:12px 16px 4px;">' +
+      '<div style="font-size:13.5px;font-weight:900;color:#fff;margin-bottom:6px;">ℹ️ INFORMACIÓN <span style="font-weight:600;color:#9aa4b0;font-size:11px;">— tocá un tema para abrirlo</span></div>' +
+      sec('reembolso', '#4dd0ff', '💸 CÓMO FUNCIONA TU REEMBOLSO', secReembolso) +
+      sec('rollover', '#ffd700', '🔒 ¿QUÉ ES EL ROLLOVER?', secRollover) +
+      (secBonos ? sec('bonos', '#26e07f', '🎁 CÓMO FUNCIONAN LOS BONOS', secBonos) : '') +
     '</div>';
   }
 
@@ -3106,25 +3204,6 @@ VIP.ui._renderDailyRoulette = function() {
   const S = Math.max(240, Math.min(Math.floor(Math.min(window.innerWidth * 0.86, window.innerHeight * 0.46)), 360));
   const R = S / 2, rr = S * 0.29, lw = Math.round(S * 0.27);
   const fs = S >= 320 ? (n > 5 ? 13 : 16) : 12;
-  const colors = ['#0e7a5c', '#0b5d47', '#12996f', '#0a4d3b'];
-  let stops = '';
-  for (let i = 0; i < n; i++) {
-    const a0 = (360 / n) * i, a1 = (360 / n) * (i + 1);
-    stops += colors[i % colors.length] + ' ' + a0 + 'deg ' + a1 + 'deg' + (i < n - 1 ? ',' : '');
-  }
-  let labels = '';
-  for (let i = 0; i < n; i++) {
-    const ang = (360 / n) * i + (360 / n) / 2;
-    const rad = ang * Math.PI / 180;
-    // Radio ESCALONADO (owner 2026-09-03): las etiquetas vecinas alternan
-    // distancia al centro para no pegarse entre sí ("$1.000 GRATIS$500 GRATIS").
-    const ri = rr * (i % 2 === 0 ? 0.74 : 1.24);
-    const x = R + ri * Math.sin(rad), y = R - ri * Math.cos(rad);
-    labels += '<div class="wrLbl" style="position:absolute;left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;' +
-      'transform:translate(-50%,-50%);width:' + lw + 'px;text-align:center;font-size:' + fs + 'px;line-height:1.15;font-weight:900;' +
-      'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85);transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' +
-      _wrEsc(segs[i] || '') + '</div>';
-  }
   const ov = document.createElement('div');
   ov.id = 'wrOverlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.9);display:flex;flex-direction:column;' +
@@ -3138,14 +3217,8 @@ VIP.ui._renderDailyRoulette = function() {
       'color:#fff;font-size:20px;font-weight:900;cursor:pointer;">✕</button>' +
     '<div style="color:#26e07f;font-size:22px;font-weight:900;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.6);">🎰 RULETA DIARIA</div>' +
     '<div style="color:#fff;opacity:.85;font-size:14px;margin:4px 0 16px;text-align:center;">Un giro gratis por día. ¡Suerte!</div>' +
-    '<div style="position:relative;width:' + S + 'px;height:' + S + 'px;margin-bottom:18px;flex:none;">' +
-      '<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);z-index:3;width:0;height:0;' +
-        'border-left:14px solid transparent;border-right:14px solid transparent;border-top:24px solid #26e07f;' +
-        'filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));"></div>' +
-      '<div id="wrWheel" style="width:' + S + 'px;height:' + S + 'px;border-radius:50%;position:relative;' +
-        'background:conic-gradient(' + stops + ');box-shadow:0 10px 34px rgba(0,0,0,.7),inset 0 0 0 5px #26e07faa;' +
-        'transition:transform 4.2s cubic-bezier(.17,.67,.2,1);">' + labels + '</div>' +
-    '</div>' +
+    VIP.ui._wheelMarkup({ S: S, segs: segs, fs: fs, accent: '#26e07f', accent2: '#0f9d58',
+      palette: ['#0b3d2a', '#1a1a4a', '#0e6b4a', '#2b0a3d', '#0b3d5a', '#3a2c00'] }) +
     '<div id="wrResult" style="color:#fff;text-align:center;font-size:15px;line-height:1.35;max-width:360px;"></div>' +
     '<div id="wrActions" style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px;margin-top:6px;">' +
       '<button type="button" id="wrSpinBtn" onclick="VIP.ui.casinoDailySpin()" ' +

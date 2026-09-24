@@ -8,6 +8,22 @@
 
 ## Sesión 2026-09-24
 
+### 291. "Mis datos" dorado + cambiar contraseña · INFORMACIÓN en acordeón · ruletas PREMIUM
+- **Mis datos:** recuadro con borde/degradé dorado (mismo tamaño), usuario y clave en
+  "pills" doradas, botones copiar dorados y **🔑 Cambiar contraseña** (abre el modal de
+  siempre en modo voluntario, por encima del casino). Al guardar la clave nueva,
+  auth.js llama `VIP.ui._paintCredsBox()` → el recuadro muestra la clave nueva al
+  instante (`_credsDefaultPass` se descarta).
+- **INFORMACIÓN (hub):** acordeón — 3 temas (Reembolso / Rollover / Bonos) cerrados por
+  defecto; tocar el título abre/cierra (estado en `VIP.ui._rwInfoOpen`, sobrevive al
+  re-render; `_rwInfoToggle` conserva el scroll).
+- **Ruletas (bienvenida y diaria):** `VIP.ui._wheelMarkup()` compartido: aro dorado/verde
+  con "luces" (repeating-conic, giro lento decorativo), gajos con paleta rica
+  (borgoña/verde/azul/violeta…) + separadores finos + profundidad radial, brillo
+  superior fijo, cubo central con el logo (fijo), puntero con pin y glow animado,
+  etiquetas en mayúsculas (las de $ en dorado). El giro (`#wrWheel` + `.wrLbl`
+  contra-rotando) no cambió. Se borró el dibujo viejo de ambas. SW → v171. Solo front.
+
 ### 290b. FIX: al loguearse desde el modo invitado no cargaba el SSO ni aparecía PREMIOS (hasta F5)
 - **Causa:** el overlay del casino ya estaba abierto en modo invitado (`_casinoOpen=true`) y
   los callers del login hacen `if (!_casinoOpen) enterCasino()` → salteaban la entrada

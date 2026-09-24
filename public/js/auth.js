@@ -1148,6 +1148,7 @@ VIP.auth = (function () {
                 VIP.state.passwordChangePending = false;
                 // Actualizar contraseña en memoria de sesión para el modal de plataforma
                 VIP.state.sessionPassword = newPassword;
+                try { VIP.ui._credsDefaultPass = null; if (VIP.ui._paintCredsBox) VIP.ui._paintCredsBox(); } catch (e) {} // #291
                 // Reflejar el teléfono verificado en el estado local para no volver a pedirlo.
                 if (data && data.phoneVerified && data.phone && VIP.state.currentUser) {
                     VIP.state.currentUser.phone = data.phone;
@@ -1334,6 +1335,7 @@ VIP.auth = (function () {
             // verificación de teléfono pendiente.
             VIP.state.passwordChangePending = false;
             VIP.state.sessionPassword = _vipChangePwdPending.newPassword;
+            try { VIP.ui._credsDefaultPass = null; if (VIP.ui._paintCredsBox) VIP.ui._paintCredsBox(); } catch (e) {} // #291
             if (VIP.state.currentUser) {
                 VIP.state.currentUser.phone = _vipChangePwdPending.phone;
                 VIP.state.currentUser.phoneVerified = false;

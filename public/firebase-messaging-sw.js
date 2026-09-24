@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v170'; // v170: fix — al loguearse desde el modo invitado, el casino carga el SSO y PREMIOS aparece sin recargar
+const CACHE_VERSION = 'v171'; // v171: Mis datos dorado + cambiar contraseña · INFORMACIÓN en acordeón · ruletas premium (aro con luces, gajos ricos, cubo con logo)
+// v170: // v170: fix — al loguearse desde el modo invitado, el casino carga el SSO y PREMIOS aparece sin recargar
 // v169: // v169: botón 🪪 Mis datos siempre en el widget + 🎁 PREMIOS siempre visible
 // v168: // v168: tocar afuera del recuadro cierra los modales (registro, recuperar clave, etc.)
 // v167: // v167: modo invitado con skin PREMIUM (cabecera 1GIROX, tabs Ingresar/Crear cuenta, campos y botón dorados, accesos) + /css/guest.css
