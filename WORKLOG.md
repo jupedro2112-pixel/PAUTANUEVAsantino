@@ -8,6 +8,17 @@
 
 ## Sesión 2026-09-24
 
+### 290. Widget: "🪪 Mis datos" siempre a mano + 🎁 PREMIOS siempre visible
+- **Pedido owner:** que usuario y clave estén en un apartado fijo (antes solo salían al
+  inicio del asistente y desaparecían al pedir la carga); y en Render no veía PREMIOS.
+- **Fix (`ui.js`):** botón **🪪 Mis datos** en el pie del widget junto a "🤖 Asistente" →
+  estado `creds` del asistente: el mismo recuadro "TUS DATOS DE INGRESO" (usuario + clave
+  con copiar) + tip + botón para volver. El recuadro del inicio sigue.
+  **PREMIOS:** el botón se muestra apenas hay sesión, sin esperar a que
+  `/api/rewards/summary` responda OK (antes, si el resumen fallaba — p.ej. entorno de
+  prueba sin girox — quedaba oculto); si falla, el hub muestra las tarjetas apagadas.
+  SW → v169. Solo front.
+
 ### 289. Tocar afuera del recuadro cierra el modal (registro, recuperar clave, reseñas, regalos)
 - Listener global en `ui.js`: click sobre el fondo `.modal` (no sobre `.modal-content`)
   → `hideModal(id)`. Excluidos `changePasswordModal` y `publisherWelcomeModal`. SW → v168.

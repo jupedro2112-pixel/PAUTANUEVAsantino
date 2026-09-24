@@ -1623,6 +1623,10 @@ VIP.ui._showCasinoFrame = function() {
         '<div class="cwFoot" style="flex:0 0 auto;display:flex;gap:14px;justify-content:center;padding:4px;">' +
           '<button type="button" class="cwGrn" onclick="VIP.ui.casinoBotGo(\'home\')" style="background:none;border:none;' +
           'font-size:10.5px;cursor:pointer;font-weight:700;">🤖 Asistente</button>' +
+          // #290: los datos de ingreso SIEMPRE a mano (antes solo salían al inicio
+          // del asistente y se perdían al pedir la carga).
+          '<button type="button" class="cwGrn" onclick="VIP.ui.casinoBotGo(\'creds\')" style="background:none;border:none;' +
+          'font-size:10.5px;cursor:pointer;font-weight:700;">🪪 Mis datos</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -2154,6 +2158,16 @@ VIP.ui.casinoBotGo = function(state) {
 
   if (state === 'roulette-prize') {
     VIP.ui._renderRoulettePrize();
+    return;
+  }
+
+  // #290: apartado fijo con usuario + clave (mismo recuadro del inicio).
+  if (state === 'creds') {
+    area.innerHTML = '';
+    VIP.ui._renderCredsBox();
+    VIP.ui._botMsg('💡 Con estos datos entrás desde cualquier celular: <b>guardalos</b> o sacá captura. 📸');
+    VIP.ui._botRow(VIP.ui._botBtn('🤖 Volver al asistente', 'VIP.ui.casinoBotGo(\'home\')', false));
+    area.scrollTop = 0;
     return;
   }
 
@@ -2725,6 +2739,12 @@ VIP.ui.casinoRouletteClose = function(silent) {
 // instantáneo en un overlay propio, fuera del chat.
 // ============================================================
 VIP.ui._refreshRewards = function() {
+  if (!VIP.state.currentToken) return; // invitado: sin premios
+  // #290: el botón 🎁 PREMIOS se ve SIEMPRE (antes dependía de que el resumen
+  // respondiera OK — en Render/entornos sin girox quedaba oculto). Si el resumen
+  // falla, el hub muestra las tarjetas apagadas.
+  const _btn0 = document.getElementById('casinoRewardsBtn');
+  if (_btn0) _btn0.style.display = 'flex';
   fetch(`${VIP.config.API_URL}/api/rewards/summary`, {
     headers: { 'Authorization': `Bearer ${VIP.state.currentToken}` }
   }).then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
