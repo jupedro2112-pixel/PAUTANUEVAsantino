@@ -2243,6 +2243,7 @@ VIP.ui.casinoBotGo = function(state) {
   const body = document.getElementById('casinoChatDrawerBody');
   if (body) body.style.display = 'none';
   VIP.ui._botStarted = true;
+  if (state !== 'info') VIP.ui._botState = state; // #296
 
   if (state === 'home') {
     area.innerHTML = '';
@@ -2289,6 +2290,10 @@ VIP.ui.casinoBotGo = function(state) {
   }
 
   if (state === 'info') {
+    // #296: el botón "¿Cómo funciona?" es un TOGGLE — si ya está abierto,
+    // volver a tocarlo lo cierra (vuelve al inicio del asistente).
+    if (VIP.ui._botState === 'info') { VIP.ui._botState = null; VIP.ui.casinoBotGo('home'); return; }
+    VIP.ui._botState = 'info';
     area.innerHTML = '';
     VIP.ui._botMsg(
       'ℹ️ <b>¿Cómo funciona?</b> Es todo <b>automático</b> 👇' +
@@ -2306,6 +2311,7 @@ VIP.ui.casinoBotGo = function(state) {
       '<div class="cwBox" style="border-radius:9px;padding:9px 11px;"><b>🎧 Soporte</b><br>' +
       'Si algo no funciona, tocá <b>Soporte</b> y te atiende una persona.</div>' +
       '</div>');
+    VIP.ui._botRow(VIP.ui._botBtn('✕ Cerrar', "VIP.ui.casinoBotGo('home')"));
     // Que se vea desde ARRIBA (owner 2026-08-22): _botMsg baja al fondo, y como
     // es un solo bloque largo quedaba mostrando el final. Se sube al inicio.
     area.scrollTop = 0;

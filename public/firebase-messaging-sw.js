@@ -34,7 +34,7 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v175'; // v175: dos formas de cargar (automatica / con un agente) con cambio facil. v174: etiquetas radiales centradas en la rueda + sin scroll horizontal. v173: escucha rewards_changed (reset de ruleta por usuario desde el panel). v172: cambiar contraseña — mínimo 6 caracteres (antes 8)
+const CACHE_VERSION = 'v176'; // v176: '¿Como funciona?' abre/cierra (toggle) + boton Cerrar. v175: dos formas de cargar (automatica / con un agente) con cambio facil. v174: etiquetas radiales centradas en la rueda + sin scroll horizontal. v173: escucha rewards_changed (reset de ruleta por usuario desde el panel). v172: cambiar contraseña — mínimo 6 caracteres (antes 8)
 // v171: // v171: Mis datos dorado + cambiar contraseña · INFORMACIÓN en acordeón · ruletas premium (aro con luces, gajos ricos, cubo con logo)
 // v170: // v170: fix — al loguearse desde el modo invitado, el casino carga el SSO y PREMIOS aparece sin recargar
 // v169: // v169: botón 🪪 Mis datos siempre en el widget + 🎁 PREMIOS siempre visible

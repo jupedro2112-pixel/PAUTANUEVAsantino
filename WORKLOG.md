@@ -8,6 +8,10 @@
 
 ## Sesión 2026-09-24
 
+### 296. "¿Cómo funciona?" abre y cierra
+- Owner: al volver a tocar el botón no se cerraba. Ahora es toggle (`VIP.ui._botState`:
+  si ya está en `info`, vuelve al inicio) + botón "✕ Cerrar" al pie. SW → v176.
+
 ### 295. Dos formas de cargar: ⚡ automática (CBU + comprobante) o 💬 con un agente (todo por chat)
 - Pedido owner: que el cliente elija entre la **carga automática** (lo que distingue a esta
   página: datos + comprobante, acredita sola) y la **carga manual** (conversación con un
