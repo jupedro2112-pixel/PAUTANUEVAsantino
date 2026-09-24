@@ -635,7 +635,10 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   `roulette-prize`, reabrible desde el inicio). La rueda en sí abre en **overlay a
   pantalla completa** (`#wrOverlay`, `_renderRoulette` / `casinoRouletteClose`), no en el
   área del chat. Panel: banner `#chatRouletteBanner`
-  (`GET/POST /api/admin/welcome-roulette/user/:userId[/use]`).
+  (`GET/POST /api/admin/welcome-roulette/user/:userId[/use]`). Reset por usuario para
+  pruebas (#293): `POST /api/admin/roulette/reset-user` `{userId|username, welcome,
+  daily}` (solo admin general) → bienvenida a `'none'` + borra el giro de HOY de la
+  diaria; emite `rewards_changed` al cliente. No devuelve lo ya acreditado.
 - **Hub "🎁 PREMIOS" + Ruleta diaria v2 + Cashback instantáneo (#254, 2026-09-01).**
   Botón flotante `#casinoRewardsBtn` (izquierda del casino, puntito rojo si hay algo
   reclamable) → overlay `#rwHubOverlay` con 3 tarjetas; `GET /api/rewards/summary` trae

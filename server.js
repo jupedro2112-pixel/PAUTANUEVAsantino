@@ -12258,6 +12258,54 @@ app.post('/api/admin/welcome-roulette/user/:userId/use', authMiddleware, adminMi
   } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
 });
 
+// #293 (owner 2026-09-24): REINICIAR la ruleta para UN SOLO usuario (pruebas).
+// Antes solo existía el reset diario GLOBAL. Esto devuelve la bienvenida a
+// 'none' (borra el premio congelado) y/o borra el giro de HOY de la diaria de
+// ese usuario, para poder volver a tirar y ver la rueda. Solo admin general.
+// ⚠️ Lo ya acreditado NO se devuelve: si vuelve a girar y sale cash, cobra de
+// nuevo (la reference vip-wroul-{userId} evita duplicar la MISMA acreditación,
+// pero un giro nuevo es otro premio). Es para cuentas de prueba, no clientes.
+// Body: { userId | username, welcome:true|false, daily:true|false }.
+app.post('/api/admin/roulette/reset-user', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo el administrador general puede hacer esto.' });
+    const b = req.body || {};
+    const q = b.userId ? { id: String(b.userId) } : (b.username ? { username: String(b.username).trim().toLowerCase() } : null);
+    if (!q) return res.status(400).json({ error: 'Falta userId o username.' });
+    const u = await User.findOne(q).select('id username createdByAgent acquisitionSource welcomeRouletteStatus welcomeRoulettePrizeLabel').lean();
+    if (!u) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const doWelcome = b.welcome !== false;
+    const doDaily = b.daily !== false;
+    const out = { success: true, userId: u.id, username: u.username, welcome: null, daily: null, warnings: [] };
+    if (doWelcome) {
+      out.welcome = { before: u.welcomeRouletteStatus || 'none', label: u.welcomeRoulettePrizeLabel || null };
+      await User.updateOne({ id: u.id }, { $set: {
+        welcomeRouletteStatus: 'none', welcomeRoulettePrizeType: null, welcomeRoulettePrizeValue: 0,
+        welcomeRoulettePrizeLabel: null, welcomeRouletteRolloverX: 0, welcomeRouletteSpunAt: null,
+        welcomeRouletteUsedAt: null, welcomeRouletteUsedBy: null
+      } });
+      if (!_welcomeRouletteEligible(u)) out.warnings.push('Cuenta creada por un agente: aunque se reinició, la ruleta de bienvenida NO le va a aparecer (#285).');
+    }
+    if (doDaily) {
+      const dateKey = _rouletteDateKeyART();
+      const r = await DailyRouletteSpin.deleteMany({ userId: u.id, dateKey });
+      await User.updateOne({ id: u.id }, { $set: { dailyRoulettePendingPct: 0, dailyRoulettePendingLabel: null } });
+      out.daily = { dateKey, deleted: (r && r.deletedCount) || 0 };
+    }
+    logger.warn(`[roulette] RESET por usuario (${req.user.username}) → ${u.username}: bienvenida=${doWelcome ? out.welcome.before + '→none' : 'no'} diaria=${doDaily ? out.daily.deleted + ' giro(s) de hoy' : 'no'}`);
+    try {
+      await _emitAdminOnlyChatNote(u.id, u.username, `🧪 Ruleta reiniciada por ${req.user.username} (prueba): ` +
+        (doWelcome ? `bienvenida ${out.welcome.before}→none` : '') + (doWelcome && doDaily ? ' · ' : '') +
+        (doDaily ? `diaria: ${out.daily.deleted} giro(s) de hoy borrado(s)` : '') + '. Lo ya acreditado no se devuelve.');
+    } catch (e) { /* nota opcional */ }
+    try { io.to(`user_${u.id}`).emit('rewards_changed', { reason: 'roulette_reset' }); } catch (e) { /* opcional */ }
+    res.json(out);
+  } catch (e) {
+    logger.warn(`[roulette] reset-user falló: ${e.message}`);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // SPIN: reserva atómica (una vez por cuenta), premio ponderado server-side,
 // y acreditación (cash automático / percent queda pendiente para la carga).
 app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, res) => {

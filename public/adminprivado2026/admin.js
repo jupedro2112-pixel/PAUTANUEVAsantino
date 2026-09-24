@@ -11551,6 +11551,10 @@ async function loadChatRouletteBanner(userId) {
             sub = (p.usedAt ? 'aplicado el ' + fmt(p.usedAt) : '') + (p.usedBy ? ' por ' + escapeHtml(p.usedBy) : '');
             bg = 'rgba(120,120,120,0.25)';
         }
+        // #293: solo admin general — reiniciar la ruleta de ESTE usuario (pruebas).
+        if (currentAdmin && currentAdmin.role === 'admin') {
+            btn += '<button onclick="resetChatRoulette(\'' + escapeHtml(String(userId)) + '\')" title="Vuelve la ruleta de bienvenida a cero y borra el giro de hoy de la diaria (solo para pruebas)" style="background:rgba(0,0,0,0.35);color:#fff;border:1px solid rgba(255,255,255,0.35);border-radius:7px;padding:6px 10px;font-weight:800;font-size:11.5px;cursor:pointer;margin-left:6px;">🧪 Reiniciar (prueba)</button>';
+        }
         el.style.display = '';
         el.style.padding = '8px 14px';
         el.style.fontSize = '12px';
@@ -11564,6 +11568,48 @@ async function loadChatRouletteBanner(userId) {
         el.style.display = 'none';
     }
 }
+
+// #293: reinicio de ruleta para UN usuario (pruebas). Bienvenida → 'none' (se
+// borra el premio congelado) + se borra el giro de HOY de la diaria. Solo admin
+// general (el server también lo exige). Lo ya acreditado no se devuelve.
+async function _resetRouletteFor(body, onDone) {
+    try {
+        const r = await authFetch('/api/admin/roulette/reset-user', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const j = await r.json();
+        if (!r.ok || !j.success) { showToast(j.error || 'No se pudo reiniciar', 'error'); return null; }
+        let msg = '🧪 Ruleta reiniciada para ' + (j.username || '') + ':';
+        if (j.welcome) msg += ' bienvenida ' + j.welcome.before + ' → none.';
+        if (j.daily) msg += ' diaria: ' + j.daily.deleted + ' giro(s) de hoy borrado(s).';
+        if (j.warnings && j.warnings.length) msg += ' ⚠️ ' + j.warnings.join(' ');
+        showToast(msg, j.warnings && j.warnings.length ? 'warning' : 'success');
+        if (onDone) onDone(j, msg);
+        return j;
+    } catch (e) { showToast('Error de conexión', 'error'); return null; }
+}
+async function resetChatRoulette(userId) {
+    if (!confirm('🧪 ¿Reiniciar la ruleta de ESTE usuario? (para pruebas)\n\n• Bienvenida: vuelve a cero, puede girar de nuevo.\n• Diaria: se borra su giro de HOY.\n\nLo que ya cobró NO se devuelve: si vuelve a girar, cobra de nuevo. Usalo solo con cuentas de prueba.')) return;
+    await _resetRouletteFor({ userId: userId, welcome: true, daily: true }, function () { loadChatRouletteBanner(userId); });
+}
+async function resetRouletteUser() {
+    const inp = document.getElementById('rouletteResetUserName');
+    const box = document.getElementById('rouletteResetUserStatus');
+    const username = (inp && inp.value || '').trim();
+    if (!username) { showToast('Escribí el usuario', 'error'); return; }
+    const welcome = !!(document.getElementById('rouletteResetUserWelcome') || {}).checked;
+    const daily = !!(document.getElementById('rouletteResetUserDaily') || {}).checked;
+    if (!welcome && !daily) { showToast('Marcá al menos una ruleta', 'error'); return; }
+    if (!confirm('🧪 ¿Reiniciar la ruleta de "' + username + '"? (solo pruebas)\n\nLo ya acreditado no se devuelve: si vuelve a girar, cobra de nuevo.')) return;
+    if (box) { box.style.color = '#aaa'; box.textContent = '⏳ Reiniciando…'; }
+    const j = await _resetRouletteFor({ username: username, welcome: welcome, daily: daily }, function (_j, msg) {
+        if (box) { box.style.color = '#66ff99'; box.textContent = msg; }
+        if (typeof loadRouletteAdmin === 'function') loadRouletteAdmin();
+    });
+    if (!j && box) { box.style.color = '#ff7070'; box.textContent = '❌ No se pudo reiniciar (revisá el usuario / permisos).'; }
+}
+window.resetChatRoulette = resetChatRoulette;
+window.resetRouletteUser = resetRouletteUser;
 
 async function markChatRouletteUsed(userId) {
     if (!confirm('¿Marcar el premio de la ruleta como USADO? El cliente no lo va a tener más.')) return;

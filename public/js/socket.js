@@ -191,6 +191,12 @@ VIP.socket = (function () {
             }
         });
 
+        // #293: el panel reinició la ruleta de este usuario (prueba) → refrescar
+        // PREMIOS / estado de la ruleta sin recargar la app.
+        VIP.state.socket.on('rewards_changed', function () {
+            try { if (VIP.ui && VIP.ui._refreshRewards) VIP.ui._refreshRewards(); } catch (e) { /* opcional */ }
+        });
+
         // Retiro RECHAZADO por el agente: el motivo se muestra en la sección
         // Retiro del widget (no en el chat). Se avisa con un toast y, si el
         // panel del casino está abierto, se refresca "mis retiros".

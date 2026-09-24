@@ -4,9 +4,26 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-09-16**
+> **Última actualización: 2026-09-24**
 
 ## Sesión 2026-09-24
+
+### 293. Reiniciar la ruleta para UN SOLO usuario (pruebas)
+- Pedido: "quiero ver cómo quedó la ruleta pero ya al tirar no puedo verla; no hay forma
+  de reiniciarla para una sola persona". Antes solo existía el reset diario GLOBAL.
+- Backend `POST /api/admin/roulette/reset-user` (solo admin general; body
+  `{userId|username, welcome, daily}`): **bienvenida** → `welcomeRouletteStatus:'none'` y
+  borra el premio congelado (tipo/valor/label/rollover/spunAt/usedAt/usedBy);
+  **diaria** → `DailyRouletteSpin.deleteMany({userId, dateKey hoy})` + limpia
+  `dailyRoulettePendingPct/Label`. Deja nota adminOnly 🧪 en el chat, log `[roulette]
+  RESET por usuario`, y emite `rewards_changed` al socket del cliente → la PWA
+  refresca PREMIOS sin F5 (`socket.js`, SW → v173). Si la cuenta es de alta manual avisa
+  que la bienvenida igual no le aparece (#285). `firstChargeBonusDone` NO se toca.
+- ⚠️ Lo ya acreditado no se devuelve: un giro nuevo es otro premio (reference nueva).
+  Es para cuentas de prueba, no para clientes.
+- Panel (admin-sw v57): botón **🧪 Reiniciar (prueba)** en el banner de ruleta del chat
+  (solo admin general, `resetChatRoulette`) + caja "🧪 REINICIAR RULETA PARA UN USUARIO"
+  en la sección Ruleta (usuario + checks Bienvenida/Diaria, `resetRouletteUser`).
 
 ### 292. Cambiar contraseña: mínimo 6 caracteres (antes 8 en el front; el server ya aceptaba 6)
 - `index.html` (`minlength=6`, placeholder) y `auth.js` (`handleChangePassword`: 6 + letras

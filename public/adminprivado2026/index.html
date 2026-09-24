@@ -1977,6 +1977,18 @@ document.addEventListener('change', function (ev) {
                     <div id="rouletteTestResult" style="margin-top:9px;"></div>
                 </div>
 
+                <!-- #293: reiniciar la ruleta para UN SOLO usuario (pruebas). -->
+                <div style="background:linear-gradient(135deg,rgba(90,60,200,0.12),rgba(60,120,255,0.06));border:1.5px solid rgba(140,110,255,0.55);border-radius:11px;padding:13px 14px;margin-bottom:14px;">
+                    <div style="color:#b9a6ff;font-weight:900;font-size:12px;letter-spacing:0.6px;margin-bottom:6px;">🧪 REINICIAR RULETA PARA UN USUARIO (pruebas)</div>
+                    <div style="color:#bbb;font-size:11px;margin-bottom:9px;line-height:1.5;">Para probar la rueda con tu cuenta sin tocar a nadie más. <b>Bienvenida</b>: vuelve a cero (borra el premio congelado, puede girar de nuevo). <b>Diaria</b>: borra SU giro de hoy. Lo ya acreditado no se devuelve (si vuelve a girar, cobra de nuevo). También está el botón 🧪 en el banner de ruleta del chat de cada cliente. Solo admin general.</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:9px;">
+                        <input type="text" id="rouletteResetUserName" placeholder="usuario (ej: jose123)" autocomplete="off" style="flex:1;min-width:160px;background:#1a1a2e;color:#fff;border:1px solid #444;border-radius:7px;padding:8px 10px;font-size:12.5px;">
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" id="rouletteResetUserWelcome" checked style="accent-color:#b9a6ff;"> Bienvenida</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:#fff;"><input type="checkbox" id="rouletteResetUserDaily" checked style="accent-color:#b9a6ff;"> Diaria (hoy)</label>
+                        <button onclick="resetRouletteUser()" style="background:linear-gradient(135deg,#7c5cff,#4b34c4);color:#fff;border:none;padding:8px 14px;border-radius:7px;font-weight:900;font-size:12.5px;cursor:pointer;letter-spacing:0.4px;">🧪 REINICIAR</button>
+                    </div>
+                    <div id="rouletteResetUserStatus" style="font-size:11.5px;color:#aaa;"></div>
+                </div>
                 <!-- Reiniciar la ruleta del día: borra los giros de HOY
                      para que todos los que ya giraron puedan girar de nuevo. -->
                 <div style="background:linear-gradient(135deg,rgba(255,60,60,0.10),rgba(255,107,53,0.06));border:1.5px solid rgba(255,60,60,0.50);border-radius:11px;padding:13px 14px;margin-bottom:14px;">
