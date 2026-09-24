@@ -2803,11 +2803,18 @@ async function loadUserInfo(userId) {
               '" style="font-size:12px;font-weight:800;color:' + (user.vipLevelInfo.color || '#ffd700') + ';">' +
               user.vipLevelInfo.emoji + ' ' + escapeHtml(user.vipLevelInfo.name) + '</span>'
             : '';
+        // #295: modo de carga que eligió el cliente en el widget (manual = quiere
+        // que le cargue un agente por chat; auto = CBU + comprobante solo).
+        const modeTag = user.depositMode === 'manual'
+            ? ' <span title="Eligió CARGA MANUAL: le pasás los datos por chat y le cargás al ver el comprobante" style="font-size:10.5px;font-weight:800;background:#7c5cff;color:#fff;border-radius:6px;padding:1px 6px;">💬 CARGA MANUAL</span>'
+            : (user.depositMode === 'auto'
+                ? ' <span title="Eligió carga AUTOMÁTICA (CBU + comprobante en el asistente)" style="font-size:10.5px;font-weight:800;background:rgba(37,211,102,0.25);color:#25d366;border-radius:6px;padding:1px 6px;">⚡ AUTO</span>'
+                : '');
         if (user.acquisitionPublisher) {
-            elements.chatUsername.innerHTML = escapeHtml(user.username) + vipTag +
+            elements.chatUsername.innerHTML = escapeHtml(user.username) + vipTag + modeTag +
                 ' <span class="chat-publisher">(📣 ' + escapeHtml(user.acquisitionPublisher) + ')</span>';
         } else {
-            elements.chatUsername.innerHTML = escapeHtml(user.username) + vipTag;
+            elements.chatUsername.innerHTML = escapeHtml(user.username) + vipTag + modeTag;
         }
 
         // Mostrar estado de la app de notificaciones

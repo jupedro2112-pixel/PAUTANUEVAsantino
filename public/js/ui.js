@@ -1937,6 +1937,15 @@ VIP.ui._casinoChatMount = function() {
   const cc = document.querySelector('.chat-container');
   const cic = document.querySelector('.chat-input-container');
   if (!drawer || !body || !cc || !cic) return;
+  // Ya montado (ej. Soporte tocado dos veces, o Soporte estando en carga
+  // manual #295): no volver a mover los nodos — se perderían los marcadores
+  // y el chat no volvería a su lugar. Solo refrescar título/estado.
+  if (VIP.ui._casinoChatPh) {
+    const t0 = document.getElementById('casinoWidgetTitle'); if (t0) t0.textContent = 'SOPORTE 1Girox';
+    const mb0 = document.getElementById('casinoManualBar'); if (mb0) mb0.remove();
+    drawer.style.display = 'flex'; body.style.display = 'flex';
+    return;
+  }
   // Modo SOPORTE: se esconde el asistente (y su barra de mensaje de mentira —
   // el chat real trae la de verdad) y se muestra el chat real. El título del
   // header pasa a SOPORTE para diferenciarlo de las cargas automáticas.
@@ -2001,6 +2010,7 @@ VIP.ui._casinoChatRestoreNodes = function() {
   if (s && s.ph1 && s.ph1.parentNode) { s.ph1.parentNode.insertBefore(s.cc, s.ph1); s.ph1.remove(); }
   if (s && s.ph2 && s.ph2.parentNode) { s.ph2.parentNode.insertBefore(s.cic, s.ph2); s.ph2.remove(); }
   VIP.ui._casinoChatPh = null;
+  { const mb = document.getElementById('casinoManualBar'); if (mb) mb.remove(); } // #295
   const body = document.getElementById('casinoChatDrawerBody');
   if (body) body.style.display = 'none';
   const botArea = document.getElementById('casinoBotArea');
@@ -2152,6 +2162,78 @@ VIP.ui._copyCred = function(txt) {
 };
 
 /** Estados del asistente. */
+// ============================================================
+// #295: DOS FORMAS DE CARGAR (owner 2026-09-24). 'auto' = carga automática
+// (CBU + comprobante en el asistente, acredita sola en segundos — lo que
+// distingue a esta página). 'manual' = carga CON UN AGENTE: es todo por chat,
+// el cliente manda la captura y el agente le carga (si la agarra hgcash/IA se
+// acredita sola igual). El cliente elige la primera vez, y puede cambiar de
+// una a otra cuando quiera (link en la tarjeta de carga / barra del chat /
+// chip del inicio). Se recuerda en localStorage + en el User (depositMode).
+// ============================================================
+VIP.ui._depositMode = function() {
+  let m = null;
+  try { m = localStorage.getItem('vip_deposit_mode'); } catch (e) {}
+  if (m !== 'auto' && m !== 'manual') m = (VIP.ui._rwSummary && VIP.ui._rwSummary.depositMode) || null;
+  return (m === 'auto' || m === 'manual') ? m : null;
+};
+VIP.ui.setDepositMode = function(mode, thenGo) {
+  if (mode !== 'auto' && mode !== 'manual') return;
+  try { localStorage.setItem('vip_deposit_mode', mode); } catch (e) {}
+  if (VIP.ui._rwSummary) VIP.ui._rwSummary.depositMode = mode;
+  try {
+    fetch(`${VIP.config.API_URL}/api/user/deposit-mode`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VIP.state.currentToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode })
+    }).catch(function() {});
+  } catch (e) {}
+  VIP.ui.showToast(mode === 'auto' ? '⚡ Carga automática activada' : '💬 Carga con un agente activada', 'success');
+  if (thenGo) {
+    // Para que la tarjeta de carga se vuelva a armar con el modo nuevo.
+    const old = document.getElementById('botDepositCard'); if (old) old.id = '';
+    VIP.ui._botDepositAt = 0;
+    VIP.ui.casinoBotGo('deposit');
+  }
+};
+VIP.ui._depositModeChip = function() {
+  const m = VIP.ui._depositMode();
+  const txt = m === 'manual' ? '💬 Con un agente' : (m === 'auto' ? '⚡ Automática' : '— sin elegir');
+  return '<div class="cwBox" style="border-radius:9px;padding:7px 10px;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">' +
+    '<span class="cwLbl" style="font-size:10.5px;font-weight:700;letter-spacing:.4px;">MODO DE CARGA</span>' +
+    '<b style="flex:1;">' + txt + '</b>' +
+    '<span class="cwGrn" onclick="VIP.ui.casinoBotGo(\'deposit-mode\')" style="font-weight:800;cursor:pointer;text-decoration:underline;">Cambiar</span></div>';
+};
+/** Carga MANUAL: abre el chat real con el agente (misma mecánica que Soporte)
+ *  y avisa al server (mensaje /sys_carga_manual + nota al panel). */
+VIP.ui.casinoBotManualDeposit = function() {
+  VIP.ui._clearSupportUnread();
+  VIP.ui._casinoChatMount();
+  const title = document.getElementById('casinoWidgetTitle');
+  if (title) title.textContent = 'Carga con un agente';
+  // Barra fina arriba del chat: modo actual + pasar a automática en 1 toque.
+  const body = document.getElementById('casinoChatDrawerBody');
+  if (body && !document.getElementById('casinoManualBar')) {
+    const bar = document.createElement('div');
+    bar.id = 'casinoManualBar';
+    bar.className = 'cwBox';
+    bar.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px;border-radius:0;';
+    bar.innerHTML = '<span style="flex:1;"><b>💬 Carga con un agente</b> · mandá la captura acá y te cargan</span>' +
+      '<button type="button" onclick="VIP.ui.setDepositMode(\'auto\', true)" class="cwSec" style="border-radius:8px;padding:6px 9px;font-size:11.5px;font-weight:800;cursor:pointer;flex:0 0 auto;">⚡ Automática</button>';
+    body.insertBefore(bar, body.firstChild);
+  }
+  try {
+    fetch(`${VIP.config.API_URL}/api/deposit/manual-start`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VIP.state.currentToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).catch(function() {});
+  } catch (e) {}
+  setTimeout(function() {
+    try { const msgs = document.getElementById('chatMessages'); if (msgs) msgs.scrollTop = msgs.scrollHeight; } catch (e) {}
+  }, 600);
+};
+
 VIP.ui.casinoBotGo = function(state) {
   const area = document.getElementById('casinoBotArea');
   if (!area) return;
@@ -2173,6 +2255,9 @@ VIP.ui.casinoBotGo = function(state) {
     // conoce (la escribió en esta sesión, o sigue siendo la default asd123
     // confirmada por el server contra el hash).
     VIP.ui._renderCredsBox();
+    // #295: modo de carga elegido + cambiar (solo si ya eligió; si no, la
+    // elección aparece al tocar Depositar).
+    if (VIP.ui._depositMode()) VIP.ui._botMsg(VIP.ui._depositModeChip());
     // (owner 2026-09-02: se SACÓ del asistente el "Estás como X" + botón
     // "Cambiar de cuenta / Salir" de #252 — no quiere que el cliente pueda
     // cerrar sesión desde el widget. VIP.ui.casinoLogout queda definido por si
@@ -2208,9 +2293,11 @@ VIP.ui.casinoBotGo = function(state) {
     VIP.ui._botMsg(
       'ℹ️ <b>¿Cómo funciona?</b> Es todo <b>automático</b> 👇' +
       '<div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">' +
-      '<div class="cwBox" style="border-radius:9px;padding:9px 11px;"><b>💳 Depositar</b><br>' +
-      'Tocá <b>Quiero Depositar</b>, transferí al CBU/alias que te damos y mandá el comprobante. ' +
-      'Se acredita <b>solo en segundos</b> — sin esperar a nadie.</div>' +
+      '<div class="cwBox" style="border-radius:9px;padding:9px 11px;"><b>💳 Depositar</b> — 2 formas, elegís vos:<br>' +
+      '<b>⚡ Automática:</b> tocá <b>Quiero Depositar</b>, transferí al CBU/alias que te damos y mandá el comprobante. ' +
+      'Se acredita <b>sola en segundos</b> — sin esperar a nadie.<br>' +
+      '<b>💬 Con un agente:</b> todo por chat con una persona: te pasa los datos, le mandás la captura y te carga. ' +
+      'Cambiás de una a otra cuando quieras (<span class="cwGrn" onclick="VIP.ui.casinoBotGo(\'deposit-mode\')" style="font-weight:800;cursor:pointer;text-decoration:underline;">elegir</span>).</div>' +
       '<div class="cwBox" style="border-radius:9px;padding:9px 11px;"><b>💸 Retirar</b><br>' +
       'Tocá <b>Solicitar Retiro</b>, poné el monto y tu CBU/alias. El pago sale <b>automático</b> ' +
       'a tu cuenta tras la verificación.</div>' +
@@ -2225,7 +2312,31 @@ VIP.ui.casinoBotGo = function(state) {
     return;
   }
 
+  if (state === 'deposit-mode') {
+    const cur = VIP.ui._depositMode();
+    const opt = function(mode, icon, titulo, desc, tag) {
+      const sel = cur === mode;
+      return '<div class="cwBox" onclick="VIP.ui.setDepositMode(\'' + mode + '\', true)" style="border-radius:11px;padding:11px 12px;cursor:pointer;' +
+        (sel ? 'outline:2px solid #25d366;' : '') + '">' +
+        '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:22px;">' + icon + '</span>' +
+        '<div style="flex:1;"><b style="font-size:13.5px;">' + titulo + '</b>' + (tag ? ' <span style="font-size:10px;font-weight:800;background:#25d366;color:#fff;border-radius:6px;padding:1px 6px;">' + tag + '</span>' : '') +
+        '<div class="cwMut" style="font-size:12px;line-height:1.35;margin-top:2px;">' + desc + '</div></div>' +
+        (sel ? '<span style="color:#25d366;font-weight:900;">✓</span>' : '') + '</div></div>';
+    };
+    VIP.ui._botMsg('💳 <b>¿Cómo querés cargar?</b> Elegí la forma que más te convenga — podés cambiarla cuando quieras.' +
+      '<div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">' +
+      opt('auto', '⚡', 'Carga automática', 'Te mostramos el CBU/alias, transferís, mandás el comprobante y se acredita <b>sola en segundos</b>. La más rápida y fácil.', 'RECOMENDADA') +
+      opt('manual', '💬', 'Carga con un agente', 'Hablás por chat con una persona: te pasa los datos, le mandás la captura y te carga. Ideal si preferís que te acompañen.') +
+      '</div>');
+    VIP.ui._botRow(VIP.ui._botBtn('↩ Volver', "VIP.ui.casinoBotGo('home')"));
+    return;
+  }
+
   if (state === 'deposit') {
+    // #295: según el modo elegido. Sin elegir → pantalla de elección.
+    const mode = VIP.ui._depositMode();
+    if (!mode) { VIP.ui.casinoBotGo('deposit-mode'); return; }
+    if (mode === 'manual') { VIP.ui.casinoBotManualDeposit(); return; }
     let card = document.getElementById('botDepositCard');
     // THROTTLE anti-spam: doble-tap en <2s no hace nada (evita apilar).
     if (card && (Date.now() - (VIP.ui._botDepositAt || 0) < 2000)) {
@@ -2293,6 +2404,9 @@ VIP.ui.casinoBotGo = function(state) {
           VIP.ui._botBtn('✅ Ya hice la transferencia', "VIP.ui.casinoBotGo('receipt')", true) +
           VIP.ui._botBtn('↩ Volver', "VIP.ui.casinoBotGo('home')")
         );
+        // #295: pasar a carga con un agente en 1 toque.
+        const sw = VIP.ui._botMsg('<span class="cwGrn" onclick="VIP.ui.setDepositMode(\'manual\', true)" style="font-weight:800;cursor:pointer;">💬 Prefiero cargar hablando con un agente →</span>');
+        if (sw) { sw.className = ''; sw.style.background = 'transparent'; sw.style.boxShadow = 'none'; sw.style.padding = '2px 4px'; sw.style.textAlign = 'center'; }
     };
     // Cache client-side: el endpoint tiene rate limit de 10s por usuario — un
     // ida-y-vuelta rápido por el bot no debe rebotar en 429.
@@ -2853,6 +2967,8 @@ VIP.ui._refreshRewards = function() {
     const changed = JSON.stringify(d) !== VIP.ui._rwSumJson;
     VIP.ui._rwSumJson = JSON.stringify(d);
     VIP.ui._rwSummary = d;
+    // #295: modo de carga guardado en el server (otro dispositivo) → local.
+    try { if ((d.depositMode === 'auto' || d.depositMode === 'manual') && !localStorage.getItem('vip_deposit_mode')) localStorage.setItem('vip_deposit_mode', d.depositMode); } catch (e) {}
     if (d.welcome && d.welcome.segments) VIP.ui._wrSegments = d.welcome.segments.map(function(x) { return x.label; });
     const btn = document.getElementById('casinoRewardsBtn');
     if (btn) btn.style.display = 'flex'; // el hub siempre existe (muestra "muy pronto" si algo está apagado)

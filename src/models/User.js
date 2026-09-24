@@ -385,6 +385,12 @@ const userSchema = new mongoose.Schema({
     default: 'organic',
     index: true
   },
+  // #295: MODO DE CARGA que eligió el cliente en el widget. 'auto' = carga
+  // automática (CBU + comprobante, acredita sola); 'manual' = prefiere hablar
+  // con un agente por chat (manda la captura ahí y el agente le carga). Vacío =
+  // todavía no eligió (el widget le muestra las dos opciones). Se puede cambiar
+  // cuando quiera desde el widget; el panel lo muestra al lado del nombre.
+  depositMode: { type: String, enum: ['auto', 'manual', null], default: null },
   // true = la cuenta la creó UN AGENTE desde el panel (admin general, depositor
   // o publisher_admin), NO el propio cliente registrándose. Lo usan los gates
   // que distinguen auto-registro de alta asistida (ej. el bono de instalación

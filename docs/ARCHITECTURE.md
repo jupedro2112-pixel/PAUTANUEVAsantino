@@ -639,6 +639,13 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   pruebas (#293): `POST /api/admin/roulette/reset-user` `{userId|username, welcome,
   daily}` (solo admin general) → bienvenida a `'none'` + borra el giro de HOY de la
   diaria; emite `rewards_changed` al cliente. No devuelve lo ya acreditado.
+- **Dos formas de cargar (#295).** `User.depositMode` `'auto'|'manual'|null`. El widget
+  pregunta al primer "Depositar" (`casinoBotGo('deposit-mode')`); `auto` = tarjeta CBU +
+  comprobante (pipeline IA/hgcash); `manual` = `casinoBotManualDeposit()` monta el chat
+  real y llama `POST /api/deposit/manual-start` (mensaje `/sys_carga_manual`, throttle
+  2 hs, nota adminOnly al panel). `POST /api/user/deposit-mode` guarda la elección;
+  `/api/rewards/summary.depositMode` la sincroniza entre dispositivos (localStorage
+  `vip_deposit_mode`). Panel: etiqueta 💬 CARGA MANUAL / ⚡ AUTO junto al nombre del chat.
 - **Hub "🎁 PREMIOS" + Ruleta diaria v2 + Cashback instantáneo (#254, 2026-09-01).**
   Botón flotante `#casinoRewardsBtn` (izquierda del casino, puntito rojo si hay algo
   reclamable) → overlay `#rwHubOverlay` con 3 tarjetas; `GET /api/rewards/summary` trae

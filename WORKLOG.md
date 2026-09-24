@@ -8,6 +8,30 @@
 
 ## Sesión 2026-09-24
 
+### 295. Dos formas de cargar: ⚡ automática (CBU + comprobante) o 💬 con un agente (todo por chat)
+- Pedido owner: que el cliente elija entre la **carga automática** (lo que distingue a esta
+  página: datos + comprobante, acredita sola) y la **carga manual** (conversación con un
+  agente: le pasa los datos, el cliente manda la captura por el chat y el agente carga; si
+  la agarra hgcash/IA se acredita sola igual), y que pueda **cambiar de una a otra fácil**.
+- Widget (`ui.js`): al tocar **Quiero Depositar** sin modo elegido → pantalla
+  `deposit-mode` con las 2 tarjetas (⚡ Automática "RECOMENDADA" / 💬 Con un agente).
+  `auto` → tarjeta CBU de siempre + link "💬 Prefiero cargar hablando con un agente →".
+  `manual` → `casinoBotManualDeposit()`: monta el chat real (título "Carga con un
+  agente"), barra fina arriba con "⚡ Automática" para volver en 1 toque, y llama
+  `POST /api/deposit/manual-start`. En el inicio hay un chip "MODO DE CARGA · Cambiar" y
+  en INFORMACIÓN se explican las dos. `VIP.ui._depositMode()` (localStorage
+  `vip_deposit_mode`, fallback `depositMode` del `/api/rewards/summary`) y
+  `VIP.ui.setDepositMode(mode, thenGo)` (guarda local + `POST /api/user/deposit-mode`).
+  `_casinoChatMount` ahora es idempotente (si ya está montado no vuelve a mover nodos).
+- Backend: `User.depositMode` ('auto'|'manual'|null). `POST /api/user/deposit-mode`.
+  `POST /api/deposit/manual-start`: marca manual, manda mensaje de sistema
+  **`/sys_carga_manual`** (editable en COMANDOS, throttle 2 hs, `metadata.kind:
+  'manual_deposit_hello'`), notifica al panel y deja nota adminOnly "💳 quiere hacer una
+  CARGA MANUAL por chat". `/api/rewards/summary` devuelve `depositMode`.
+- Panel (admin-sw v58): etiqueta **💬 CARGA MANUAL** (violeta) o **⚡ AUTO** al lado del
+  nombre en el header del chat (`loadUserInfo`, `/api/users/:id` ya devolvía el campo).
+  SW PWA → v175.
+
 ### 294. Rueda: etiquetas RADIALES centradas en cada gajo + sin scroll horizontal en celular
 - Owner (captura iPhone 14): los nombres no quedaban centrados en los gajos (iban
   horizontales, a radio escalonado, y se pisaban con las líneas). Ahora `_wheelMarkup`

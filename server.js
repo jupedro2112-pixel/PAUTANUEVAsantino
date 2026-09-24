@@ -6379,6 +6379,62 @@ app.post('/api/support/hello', authMiddleware, async (req, res) => {
   }
 });
 
+// #295: MODO DE CARGA elegido por el cliente ('auto' | 'manual'). Se guarda
+// en el User para que el panel lo vea al lado del nombre y para recordarlo
+// en cualquier dispositivo (el widget además lo cachea en localStorage).
+app.post('/api/user/deposit-mode', authMiddleware, async (req, res) => {
+  try {
+    const mode = String((req.body || {}).mode || '').toLowerCase();
+    if (mode !== 'auto' && mode !== 'manual') return res.status(400).json({ error: 'Modo inválido' });
+    await User.updateOne({ id: req.user.userId }, { $set: { depositMode: mode } });
+    res.json({ success: true, mode });
+  } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// #295: el cliente en modo MANUAL tocó "Depositar" → abre el chat con el
+// agente. Se manda un mensaje de sistema (/sys_carga_manual, editable en
+// COMANDOS, throttle 2hs) y se avisa al panel para que el agente sepa que
+// quiere CARGAR (no es una consulta cualquiera). Si el comprobante que manda
+// por el chat lo agarra hgcash / la IA, se acredita solo igual (owner: "si es
+// por hgcash que cargue directo").
+app.post('/api/deposit/manual-start', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const username = req.user.username || 'Usuario';
+    await User.updateOne({ id: userId }, { $set: { depositMode: 'manual' } });
+    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const recent = await Message.findOne({
+      receiverId: userId, 'metadata.kind': 'manual_deposit_hello', timestamp: { $gte: cutoff }
+    }).lean();
+    if (recent) return res.json({ success: true, alreadySent: true });
+    const content = await renderSystemCommand(
+      '/sys_carga_manual',
+      '💬 ¡Hola! Elegiste cargar con un agente.\n\nDecinos cuánto querés cargar y te pasamos los datos. Cuando transfieras, mandá la captura del comprobante acá mismo y te acreditamos. 📸'
+    );
+    if (content) {
+      const msg = await Message.create({
+        id: uuidv4(),
+        senderId: 'system', senderUsername: 'Sistema', senderRole: 'admin',
+        receiverId: userId, receiverRole: 'user',
+        content, type: 'text', timestamp: new Date(), read: false,
+        metadata: { kind: 'manual_deposit_hello' }
+      });
+      const data = {
+        id: msg.id, senderId: 'system', senderUsername: 'Sistema', senderRole: 'admin',
+        receiverId: userId, receiverRole: 'user', content, timestamp: msg.timestamp, type: 'text'
+      };
+      io.to(`user_${userId}`).emit('new_message', data);
+      io.to(`chat_${userId}`).emit('new_message', data);
+      notifyAdmins('new_message', { message: data, userId, username });
+    }
+    try { await _emitAdminOnlyChatNote(userId, username, `💳 ${username} quiere hacer una CARGA MANUAL por chat (eligió "con un agente"). Pasale los datos y cargale al ver el comprobante.`); } catch (e) { /* nota opcional */ }
+    res.json({ success: true });
+  } catch (e) {
+    logger.warn(`[deposit] manual-start falló: ${e.message}`);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // POST /api/messages/welcome
 // Crea los mensajes de bienvenida del lado del ADMIN/sistema (no del usuario).
 // Antes el cliente los mandaba vía /api/messages/send con su propio token, lo
@@ -11043,6 +11099,12 @@ async function initializeData() {
       description: 'Mensaje automático cuando el cliente abre el SOPORTE del widget del casino (máx. 1 vez cada 6hs por cliente). Si lo dejás vacío, no se envía.',
       type: 'message',
       response: '👋 ¡Bienvenido al SOPORTE de 1Girox!\n\nContanos tu consulta y te damos una solución al toque. 🎧'
+    },
+    {
+      name: '/sys_carga_manual',
+      description: 'Mensaje automático cuando el cliente elige CARGA MANUAL (con un agente por chat) y abre el chat para cargar (máx. 1 vez cada 2hs por cliente). Si lo dejás vacío, no se envía.',
+      type: 'message',
+      response: '💬 ¡Hola! Elegiste cargar con un agente.\n\nDecinos cuánto querés cargar y te pasamos los datos. Cuando transfieras, mandá la captura del comprobante acá mismo y te acreditamos. 📸'
     }
   ];
   for (const cmd of systemCmds) {
@@ -12702,6 +12764,11 @@ app.get('/api/rewards/summary', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     const username = req.user.username;
     const out = { welcome: null, daily: null, cashback: { enabled: false } };
+    // #295: modo de carga elegido (el widget lo recuerda entre dispositivos).
+    try {
+      const _dm = await User.findOne({ id: userId }).select('depositMode').lean();
+      out.depositMode = (_dm && _dm.depositMode) || null;
+    } catch (e) { out.depositMode = null; }
 
     // Bienvenida
     try {
