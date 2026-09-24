@@ -8,6 +8,10 @@
 
 ## Sesión 2026-09-24
 
+### 289. Tocar afuera del recuadro cierra el modal (registro, recuperar clave, reseñas, regalos)
+- Listener global en `ui.js`: click sobre el fondo `.modal` (no sobre `.modal-content`)
+  → `hideModal(id)`. Excluidos `changePasswordModal` y `publisherWelcomeModal`. SW → v168.
+
 ### 288b. Modo invitado con skin PREMIUM (owner: "algo más premium, no la copia de lo viejo")
 - **`public/css/guest.css`** (scope `.guest-premium`): recuadro oscuro con degradé y borde
   dorado, cabecera con logo redondo 1GIROX + marca en dorado degradé + tagline, **tabs

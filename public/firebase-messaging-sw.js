@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v167'; // v167: modo invitado con skin PREMIUM (cabecera 1GIROX, tabs Ingresar/Crear cuenta, campos y botón dorados, accesos) + /css/guest.css
+const CACHE_VERSION = 'v168'; // v168: tocar afuera del recuadro cierra los modales (registro, recuperar clave, etc.)
+// v167: // v167: modo invitado con skin PREMIUM (cabecera 1GIROX, tabs Ingresar/Crear cuenta, campos y botón dorados, accesos) + /css/guest.css
 // v166: // v166: modo INVITADO — sin sesión se ve el casino de fondo y el widget con Ingresar/Registrarse (chau pantalla vieja de login)
 // v165: // v165: la ruleta explica cómo funciona el % (tope del 100% + rollover) al ganar, en el hub y en Mi premio
 // v164: // v164: ruleta de bienvenida marcada como usada cuando el 100% de 1ª carga ya se cobró (sin doble 100%)

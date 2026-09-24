@@ -12,6 +12,16 @@ VIP.ui = (function () {
         document.getElementById(modalId).classList.remove('hidden');
     }
 
+    // #289 (owner 2026-09-24): tocar AFUERA del recuadro cierra el modal (registro,
+    // recuperar clave, reseñas, regalos…). Excepciones: el cambio de clave
+    // obligatorio y la bienvenida del publicista (tienen su propio flujo).
+    const MODALS_NO_BACKDROP_CLOSE = ['changePasswordModal', 'publisherWelcomeModal'];
+    document.addEventListener('click', function (e) {
+        const m = e.target && e.target.classList && e.target.classList.contains('modal') ? e.target : null;
+        if (!m || !m.id || MODALS_NO_BACKDROP_CLOSE.includes(m.id)) return;
+        try { hideModal(m.id); } catch (err) {}
+    });
+
     function hideModal(modalId) {
         if (modalId === 'changePasswordModal' && VIP.state.passwordChangePending) {
             return;
