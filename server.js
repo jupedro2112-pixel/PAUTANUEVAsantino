@@ -7866,6 +7866,14 @@ async function getRefundMinimums() {
 // (rango real del jugador) y se aplica sobre lo que queda sin reembolsar.
 // El cashback instantáneo (si está encendido) se sigue descontando por MONTO.
 // ============================================================
+// #301: gate "app instalada" para reclamar CUALQUIER reembolso. Devuelve null
+// si puede, o la respuesta JSON a devolver si no.
+const REFUND_NEEDS_APP_MSG = '📲 Para reclamar tu reembolso necesitás tener la APP instalada (agregada a la pantalla de inicio) con las notificaciones activadas. Instalala desde el botón "📱 Instalar App" o desde 🎁 PREMIOS → Instalar la app.';
+async function _refundAppGate(userId) {
+  const u = await User.findOne({ id: userId }).select('fcmTokenContext fcmTokens').lean();
+  if (_rouletteHasAppInstalled(u)) return null;
+  return { success: false, canClaim: false, needsApp: true, message: REFUND_NEEDS_APP_MSG };
+}
 const REFUND_DAILY_CONFIG_KEY = 'refundDailyEnabled';
 async function getRefundDailyEnabled() {
   try {
@@ -7924,12 +7932,18 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
     const lastMonthRange = periodRanges.getLastMonthRangeArgentinaEpoch();
     const yesterdayRange = periodRanges.getYesterdayRangeArgentinaEpoch(); // #297
 
-    const [weeklyStatus, monthlyStatus, dailyStatus, dailyEnabled] = await Promise.all([
+    const [weeklyStatus, monthlyStatus, dailyStatus, dailyEnabled, _uApp] = await Promise.all([
       refunds.canClaimWeeklyRefund(userId),
       refunds.canClaimMonthlyRefund(userId),
       refunds.canClaimDailyRefund(userId, yesterdayRange.dateStr, yesterdayRange.nextDayIso),
-      getRefundDailyEnabled()
+      getRefundDailyEnabled(),
+      User.findOne({ id: userId }).select('fcmTokenContext fcmTokens').lean()
     ]);
+    // #301 (owner 2026-09-24): los reembolsos (como la ruleta diaria) exigen la
+    // APP INSTALADA (token FCM de contexto standalone). Sin app: se ven los
+    // montos pero no se puede reclamar (needsApp) — incentivo concreto.
+    const appInstalled = _rouletteHasAppInstalled(_uApp);
+    const needsApp = !appInstalled;
 
     // Rangos de fechas para calcular depósitos y retiros reales
     const weeklyFrom = new Date(lastWeekRange.fromEpoch * 1000);
@@ -8026,8 +8040,10 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
         monthly: refundTiers.listTiers(tiersByPeriod.monthly)
       },
       // #297: DIARIO de vuelta — la pérdida de AYER, día por día.
+      appInstalled,
       daily: {
         enabled: dailyEnabled,
+        needsApp,
         ...(dailyEnabled ? dailyStatus : { canClaim: false, nextClaim: null }),
         potentialAmount: dailyEnabled ? dailyCalc.amount : 0,
         netAmount: dailyNetLoss,
@@ -8039,6 +8055,7 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
       },
       weekly: {
         ...weeklyStatus,
+        needsApp,
         potentialAmount: weeklyCalc.amount,
         netAmount: weeklyNetLoss,
         alreadyRefunded: weeklyBaseDone,   // #297: base ya cobrada por diarios
@@ -8053,6 +8070,7 @@ app.get('/api/refunds/status', authMiddleware, async (req, res) => {
       },
       monthly: {
         ...monthlyStatus,
+        needsApp,
         potentialAmount: monthlyCalc.amount,
         netAmount: monthlyNetLoss,
         alreadyRefunded: monthlyBaseDone,  // #297: base ya cobrada por diarios + semanales
@@ -8084,6 +8102,7 @@ app.post('/api/refunds/claim/daily', authMiddleware, async (req, res) => {
     if (!(await getRefundDailyEnabled())) {
       return res.json({ success: false, canClaim: false, message: 'El reembolso diario no está disponible por el momento. Seguí aprovechando el SEMANAL y el MENSUAL.' });
     }
+    { const _g = await _refundAppGate(userId); if (_g) return res.json(_g); } // #301
     if (!await acquireRefundLock(userId, 'daily')) {
       return res.json({ success: false, message: '⏳ Ya estás procesando un reembolso. Por favor espera...', canClaim: true, processing: true });
     }
@@ -8190,6 +8209,7 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     const username = req.user.username;
     
+    { const _g = await _refundAppGate(userId); if (_g) return res.json(_g); } // #301
     if (!await acquireRefundLock(userId, 'weekly')) {
       return res.json({
         success: false,
@@ -8370,6 +8390,7 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     const username = req.user.username;
     
+    { const _g = await _refundAppGate(userId); if (_g) return res.json(_g); } // #301
     if (!await acquireRefundLock(userId, 'monthly')) {
       return res.json({
         success: false,

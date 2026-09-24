@@ -3172,7 +3172,8 @@ function _rwPeriodRefundsBody() {
     const amt = Number(d.potentialAmount) || 0;
     const ok = d.canClaim && amt > 0 && !d.belowMinimum;
     let status;
-    if (ok) status = '<span style="color:#26e07f;font-weight:800;">¡Listo para reclamar!</span>';
+    if (d.needsApp) status = '<span style="color:#ffd479;font-weight:800;">📲 Necesitás la app instalada para reclamar</span>';
+    else if (ok) status = '<span style="color:#26e07f;font-weight:800;">¡Listo para reclamar!</span>';
     else if (amt > 0 && d.belowMinimum) status = 'Mínimo para cobrar ' + _rwFmt(d.minAmount) + (r.key === 'daily' ? ' · entra en el semanal' : '');
     else if (amt <= 0 && d.alreadyRefunded > 0 && d.netAmount > 0) status = '<span style="color:#7fe07f;">✅ Ya reembolsado (' + _rwFmt(d.alreadyRefunded) + ')</span>';
     else if (amt <= 0) status = 'Sin pérdida en el período';
@@ -3187,10 +3188,15 @@ function _rwPeriodRefundsBody() {
       '</div>' +
       '<div style="text-align:right;flex:none;">' +
         '<div style="font-size:17px;font-weight:900;color:' + (ok ? '#4dd0ff' : '#5a6672') + ';">' + _rwFmt(amt) + '</div>' +
-        (ok ? '<button type="button" onclick="VIP.ui._rwClaimRefund(\'' + r.key + '\')" style="margin-top:4px;border:none;cursor:pointer;background:linear-gradient(135deg,#4dd0ff,#1e88e5);color:#00223a;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:900;">💸 Reclamar</button>' : '') +
+        (d.needsApp
+          ? '<button type="button" onclick="VIP.ui._rwShowInstallGuide()" style="margin-top:4px;border:none;cursor:pointer;background:linear-gradient(135deg,#26e07f,#0f9d58);color:#00301a;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:900;">📲 Instalar</button>'
+          : (ok ? '<button type="button" onclick="VIP.ui._rwClaimRefund(\'' + r.key + '\')" style="margin-top:4px;border:none;cursor:pointer;background:linear-gradient(135deg,#4dd0ff,#1e88e5);color:#00223a;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:900;">💸 Reclamar</button>' : '')) +
       '</div>' +
     '</div>';
   });
+  if (html && st.appInstalled === false) {
+    html = '<div style="font-size:12px;color:#ffd479;background:rgba(255,212,121,0.08);border:1px solid rgba(255,212,121,0.3);border-radius:10px;padding:8px 10px;margin-bottom:4px;">📲 Los reembolsos se reclaman <b>desde la app instalada</b> (agregada a la pantalla de inicio, con notificaciones). Tocá <b>Instalar</b> y te guiamos.</div>' + html;
+  }
   return html || '<div style="font-size:13px;color:#9aa4b0;">Por ahora no hay reembolsos activos.</div>';
 }
 VIP.ui._rwClaimRefund = function(type) {
@@ -3405,6 +3411,7 @@ VIP.ui.openRewardsHub = function() {
       li('🗓️', '<b style="color:#fff;">Mensual:</b> desde el día 7 reclamás la pérdida del <b style="color:#fff;">mes pasado</b>.') +
       li('1️⃣', 'Cada pérdida se reembolsa <b style="color:#fff;">una sola vez</b>: lo que ya cobraste con el diario se descuenta del semanal, y lo del diario y semanal, del mensual. Si un día no reclamás el diario, no lo perdés: entra en el semanal.') +
       li('📈', 'Cuanto más perdés en el período, mayor el %. Tocá tu USUARIO en la app para ver la escala completa.') +
+      li('📲', 'Se reclaman <b style="color:#fff;">desde la app instalada</b> (igual que la ruleta diaria).') +
       li('⚽', '<b style="color:#ff8a80;">DEPORTES NO genera reembolso</b>: solo cuenta lo que jugás en <b style="color:#26e07f;">slots y casino</b>.') +
       li('⚡', 'Al reclamar, entra <b style="color:#fff;">YA</b> a tu saldo como <b style="color:#fff;">BONUS</b>.')
     );

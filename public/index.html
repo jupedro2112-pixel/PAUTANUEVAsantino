@@ -3448,11 +3448,12 @@
         // MOSTRAR BOTÓN DE INSTALACIÓN
         // ============================================
         function showInstallButton() {
-            // Si el usuario lo cerró con la ✕, respetarlo por 3 días (el botón le
-            // tapaba contenido y molestaba a quien no quiere instalar todavía).
+            // Si el usuario lo cerró con la ✕, respetarlo por 24 h (#301, owner
+            // 2026-09-24: antes eran 3 días y "no aparecía nunca más"). Vuelve
+            // a aparecer al día siguiente y se puede volver a cerrar.
             try {
                 const _dismissedAt = Number(localStorage.getItem('pwaInstallDismissedAt') || 0);
-                if (_dismissedAt && (Date.now() - _dismissedAt) < 3 * 24 * 60 * 60 * 1000) return;
+                if (_dismissedAt && (Date.now() - _dismissedAt) < 24 * 60 * 60 * 1000) return;
             } catch (_) {}
             // Crear botón si no existe
             let installBtn = document.getElementById('pwaInstallButton');

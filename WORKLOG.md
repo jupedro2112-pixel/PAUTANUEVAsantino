@@ -8,6 +8,20 @@
 
 ## Sesión 2026-09-24
 
+### 301. Reembolsos solo con la APP instalada + botón "Instalar App" vuelve cada 24 h
+- Owner: "ruleta diaria y reembolsos precisan tener app instalada". La ruleta diaria ya
+  lo exigía (`_rouletteHasAppInstalled`: token FCM de contexto `standalone`). Ahora los
+  3 reembolsos también: `_refundAppGate(userId)` al inicio de `claim/daily|weekly|monthly`
+  (responde `needsApp:true` + mensaje), y `/api/refunds/status` devuelve `appInstalled`
+  y `needsApp` en cada período (los montos se siguen viendo: es el incentivo).
+- PWA (SW v181): hub PREMIOS → fila con "📲 Necesitás la app instalada para reclamar" y
+  botón **Instalar** (guía `_rwShowInstallGuide`), aviso arriba de las filas; modal de
+  reembolso del dashboard → botón "📲 Instalar la app"; botón del dashboard muestra
+  "📲 Instalá la app". INFORMACIÓN lo menciona.
+- Botón verde "📱 Instalar App / Agregar a Inicio": al cerrarlo con la ✕ vuelve a
+  aparecer a las **24 h** (antes 3 días → "no aparecía nunca más"); se puede volver a
+  cerrar. `localStorage.pwaInstallDismissedAt`.
+
 ### 300. Widget redimensionable + "Depositar" de nuevo vuelve a elegir el modo
 - **Agarre** (`#casinoDrawerGrip`, barra con pastilla arriba del header verde): arrastrar
   hacia arriba agranda el widget, hacia abajo lo achica (260px … alto de pantalla − 40);

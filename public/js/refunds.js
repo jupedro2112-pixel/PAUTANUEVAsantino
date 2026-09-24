@@ -170,7 +170,10 @@ VIP.refunds = (function () {
         btn.disabled = false;
         btn.classList.remove('claimed');
 
-        if (data.canClaim && data.potentialAmount > 0) {
+        if (data.needsApp && data.potentialAmount > 0) {
+            timer.textContent = '📲 Instalá la app';
+            btn.style.opacity = '0.85';
+        } else if (data.canClaim && data.potentialAmount > 0) {
             timer.textContent = '¡Listo!';
             btn.style.opacity = '1';
         } else {
@@ -358,6 +361,21 @@ VIP.refunds = (function () {
             // #297: ya reclamó lo de ayer → mañana.
             isClaimed = true;
             timeRemaining = 'mañana';
+        }
+
+        if (typeData.needsApp) {
+            // #301: reembolsos solo desde la app instalada.
+            extraInfo.innerHTML = '<span style="color: #ffd479;">📲 Para reclamar tu reembolso necesitás tener la <strong>app instalada</strong> (agregada a la pantalla de inicio) con las notificaciones activadas.</span>';
+            claimBtn.disabled = false;
+            claimBtn.textContent = '📲 Instalar la app';
+            claimBtn.style.background = 'linear-gradient(135deg, #26e07f 0%, #0f9d58 100%)';
+            claimBtn.onclick = () => {
+                VIP.ui.hideModal('refundModal');
+                if (VIP.ui._rwShowInstallGuide) VIP.ui._rwShowInstallGuide();
+                else if (typeof installApp === 'function') installApp();
+            };
+            VIP.ui.showModal('refundModal');
+            return;
         }
 
         if (typeData.potentialAmount <= 0 && typeData.alreadyRefunded > 0 && typeData.netAmount > 0) {

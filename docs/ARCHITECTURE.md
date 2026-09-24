@@ -725,6 +725,8 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   el mes). `RefundClaim.netAmount` guarda la base EFECTIVAMENTE reembolsada en ese
   reclamo (ya neta de lo previo); el % sale de la pérdida total del período y se
   aplica sobre lo que queda. Interruptor `Config['refundDailyEnabled']` (default ON).
+  **Requieren la APP instalada (#301):** `_refundAppGate` (token FCM `standalone`,
+  mismo criterio que la ruleta diaria) → `needsApp` en status y en el claim.
   El diario se había eliminado el 2026-08-07 y volvió el 2026-09-24. **Desde
   2026-08-05 los rangos son EDITABLES desde el panel y CADA PERÍODO tiene su propia
   escalera**: `Config['refundTiersByPeriod']`
