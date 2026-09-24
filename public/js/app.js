@@ -12,11 +12,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // login normal (incluido el recuadro obligatorio de crear contraseña).
     const _accessLinkPromise = (VIP.auth && VIP.auth.tryAccessLink)
         ? VIP.auth.tryAccessLink() : Promise.resolve(false);
+    // #288: sin sesión → el casino igual (modo INVITADO) con el widget de
+    // Ingresar/Registrarse, en vez de la pantalla vieja de login.
+    const _guest = () => { try { if (!VIP.ui.enterCasinoGuest || !VIP.ui.enterCasinoGuest()) VIP.ui.showLoginScreen(); } catch (e) { try { VIP.ui.showLoginScreen(); } catch (_) {} } };
     _accessLinkPromise.then((viaLink) => {
         if (viaLink || VIP.state.currentToken) VIP.auth.verifyToken();
+        else _guest();
     }).catch(() => {
         if (VIP.state.currentToken) VIP.auth.verifyToken();
+        else _guest();
     });
+    // Red de seguridad del splash: si a los 6s no abrió ningún casino, destapar.
+    setTimeout(() => { try { if (!VIP.ui._casinoOpen) document.documentElement.classList.remove('casino-boot'); } catch (e) {} }, 6000);
     setupEventListeners();
 
     // Welcome del publicista: se muestra PRE-AUTH si el visitante llegó por

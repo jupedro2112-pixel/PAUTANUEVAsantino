@@ -6,6 +6,35 @@
 >
 > **Última actualización: 2026-09-16**
 
+## Sesión 2026-09-24
+
+### 288. MODO INVITADO: sin sesión se ve el casino de fondo + el widget con Ingresar/Registrarse
+- **Pedido owner:** que quien no está logueado vea lo mismo que un cliente (el casino que
+  usamos de fondo) y que el widget, en vez del chat/soporte, ofrezca ingresar o
+  registrarse — chau pantalla vieja de login.
+- **Implementación (solo front):**
+  - `VIP.ui.enterCasinoGuest()` (ui.js): abre el overlay del casino con el **sitio
+    público** de 1girox (`VIP.config.PLATFORM_URL`, sin SSO) y **muda el `.login-box`**
+    de `#loginScreen` adentro del panel del widget (`#guestAuthWrap`, scrolleable) —
+    mismos nodos, ids y listeners → todos los flujos existentes siguen intactos
+    (login, registro, OTP, recuperar clave, publicista, reseñas, regalos, ticker).
+    Widget: título "Ingresá o creá tu cuenta", filas de acciones y pie ocultos
+    (queda la fila 📣 Comunidad), burbuja "🔑 INGRESAR / REGISTRARTE". El overlay
+    baja a z-index 9000 mientras es invitado para que los modales (10000) se vean
+    encima; al loguearse vuelve a 99999.
+  - `_guestExit()`: devuelve el recuadro a su lugar y restaura el widget. Se llama en
+    `showChatScreen`, `enterCasino` y `enterCasinoWithUrl` → el login exitoso carga el
+    SSO en el MISMO iframe.
+  - `showLoginScreen()` ahora intenta el modo invitado primero (fallback: pantalla
+    vieja). `app.js`: sin token ni access-link → `enterCasinoGuest()`; splash
+    `casino-boot` para TODOS (index.html) con red de seguridad a los 6 s.
+- **No cambia:** flujos con `?acceso=` (landing), cuentas staff (después del login ven
+  el chat normal), el dashboard viejo (sigue tapado). **SW → v166.**
+- **Validado:** `node --check` OK (ui.js, app.js, sw). PROBAR: abrir la PWA sin sesión →
+  casino de fondo + widget con el login → registrarse (OTP visible sobre el casino) →
+  al entrar, el iframe pasa al SSO y el widget vuelve a "Cargas Automáticas"; logout
+  → vuelve el modo invitado.
+
 ## Sesión 2026-09-18
 
 ### 287. La ruleta explica "cómo funciona" el % (tope del 100 % + rollover)

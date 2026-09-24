@@ -38,7 +38,11 @@
             // inválido / logout) o al abrir el casino.
             var _hasTok = false;
             try { _hasTok = !!localStorage.getItem('userToken'); } catch (e) {}
-            if ((_q.get('acceso') && (_ir === 'casino' || _ir === 'creds')) || _hasTok) {
+            // #288: TODOS arrancan en el casino — con sesión (SSO) o sin sesión
+            // (modo INVITADO: el sitio público de 1girox de fondo + el widget con
+            // Ingresar/Registrarse). Por eso el splash va siempre; app.js lo saca
+            // a los 6s si el casino no llegó a abrir (red de seguridad).
+            if ((_q.get('acceso') && (_ir === 'casino' || _ir === 'creds')) || _hasTok || true) {
                 document.documentElement.classList.add('casino-boot');
             }
         } catch (e) {}

@@ -34,7 +34,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DE CACHÉ
 // ============================================
-const CACHE_VERSION = 'v165'; // v165: la ruleta explica cómo funciona el % (tope del 100% + rollover) al ganar, en el hub y en Mi premio
+const CACHE_VERSION = 'v166'; // v166: modo INVITADO — sin sesión se ve el casino de fondo y el widget con Ingresar/Registrarse (chau pantalla vieja de login)
+// v165: // v165: la ruleta explica cómo funciona el % (tope del 100% + rollover) al ganar, en el hub y en Mi premio
 // v164: // v164: ruleta de bienvenida marcada como usada cuando el 100% de 1ª carga ya se cobró (sin doble 100%)
 // v163: // v163: info del hub — bonos con tope del 100%, rollover cuenta deportes, ruleta bienvenida solo auto-registro
 // v162: // v162: cartel ¡Carga acreditada! muestra el bono y su ROLLOVER

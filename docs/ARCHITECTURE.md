@@ -831,7 +831,10 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   INLINE de index.html; `window.sendFcmTokenAfterLogin` del inline pisa a propósito la
   de notifications.js. Firebase config duplicada en index.html Y en el SW (cambiar
   ambas). iOS: push solo en PWA instalada.
-- SPA sin router: `#loginScreen`/`#chatScreen` + modales. Estado de login en globals
+- SPA sin router: `#loginScreen`/`#chatScreen` + modales. **Modo invitado (#288):** sin
+  sesión no se ve `#loginScreen` sino el overlay del casino con el sitio público de 1girox
+  y el `.login-box` MUDADO adentro del widget (`enterCasinoGuest` / `_guestExit` en ui.js;
+  el overlay baja a z-index 9000 para que los modales queden arriba). Estado de login en globals
   `window._loginMode` etc. Interceptor global de fetch (auth.js) reabre el modal
   obligatorio ante 403 MUST_CHANGE_PASSWORD.
 - Server-side rendering mínimo: `renderIndexHtml` reemplaza placeholders

@@ -83,13 +83,18 @@ VIP.ui = (function () {
     // ---- Screen switching ----
 
     function showLoginScreen() {
+        document.getElementById('chatScreen').classList.add('hidden');
+        // #288: sin sesión se muestra el CASINO en modo invitado (sitio público
+        // de fondo + widget con Ingresar/Registrarse). La pantalla vieja de
+        // login queda solo como fallback si el modo invitado no pudo abrir.
+        try { if (VIP.ui.enterCasinoGuest && VIP.ui.enterCasinoGuest()) return; } catch (e) {}
         // Sacar el splash de arranque (#253): acá SÍ hay que ver el login.
         try { document.documentElement.classList.remove('casino-boot'); } catch (e) {}
         document.getElementById('loginScreen').classList.remove('hidden');
-        document.getElementById('chatScreen').classList.add('hidden');
     }
 
     function showChatScreen() {
+        try { if (VIP.ui._guestExit) VIP.ui._guestExit(); } catch (e) {} // #288
         // Splash de arranque (#253): para roles que NO van al casino se saca ya;
         // para clientes, lo saca _showCasinoFrame al abrir el casino. Red de
         // seguridad: si a los 4s el casino no abrió (modal de cambio de clave,
@@ -922,9 +927,87 @@ VIP.ui._casinoOpening = false;
  */
 VIP.ui._casinoOpen = false;
 
+// ============================================================
+// #288 MODO INVITADO (owner 2026-09-24): sin sesión, el visitante ve el MISMO
+// formato que un cliente logueado — el casino de fondo (sitio público de
+// 1girox, sin SSO) y el widget flotante — pero el widget, en vez del chat/bot,
+// muestra el recuadro de INGRESAR / REGISTRARSE (se MUDA el .login-box de la
+// pantalla vieja adentro del panel: conserva ids, listeners y todos los flujos:
+// registro, OTP, recuperar clave, publicista, reseñas, regalos). Al loguearse,
+// showChatScreen → _guestExit devuelve el recuadro y enterCasino carga el SSO
+// en el mismo iframe.
+// ============================================================
+VIP.ui._guestMode = false;
+VIP.ui.enterCasinoGuest = function() {
+  if (VIP.state && VIP.state.currentToken) return false;
+  const box = document.querySelector('#loginScreen .login-box');
+  if (!box) return false;
+  VIP.ui._guestMode = true;
+  VIP.ui._botStarted = true; // que openCasinoChat no dibuje el bot (está oculto)
+  VIP.ui._showCasinoFrame();
+  const overlay = document.getElementById('casinoOverlay');
+  const frame = document.getElementById('casinoFrame');
+  const status = document.getElementById('casinoFrameStatus');
+  // Los modales del login (OTP, reseñas, regalos, recuperar clave, bienvenida
+  // del publicista) tienen z-index 10000: el overlay baja a 9000 mientras es
+  // invitado para que se vean ARRIBA. Al loguearse vuelve a 99999.
+  if (overlay) overlay.style.zIndex = '9000';
+  if (status) status.textContent = '🎰 Cargando el casino…';
+  if (frame) { frame.src = VIP.config.PLATFORM_URL; frame.style.display = 'block'; }
+  try { document.getElementById('loginScreen').classList.add('hidden'); } catch (e) {}
+  // --- widget en modo invitado ---
+  const drawer = document.getElementById('casinoChatDrawer');
+  if (drawer) {
+    drawer.querySelectorAll('.cwBar, .cwFoot').forEach(function(el) { if (el.id !== 'casinoCommunityRow') el.style.display = 'none'; });
+    const bot = document.getElementById('casinoBotArea'); if (bot) bot.style.display = 'none';
+    const title = document.getElementById('casinoWidgetTitle'); if (title) title.textContent = 'Ingresá o creá tu cuenta';
+    const body = document.getElementById('casinoChatDrawerBody');
+    if (body) {
+      let wrap = document.getElementById('guestAuthWrap');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'guestAuthWrap';
+        wrap.style.cssText = 'flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:8px;';
+        body.appendChild(wrap);
+      }
+      if (!VIP.ui._guestBoxPh) {
+        const ph = document.createElement('div'); ph.style.display = 'none';
+        box.parentNode.insertBefore(ph, box);
+        VIP.ui._guestBoxPh = ph;
+      }
+      wrap.appendChild(box);
+      body.style.display = 'flex';
+    }
+  }
+  const bubble = document.getElementById('casinoSupportBubble');
+  if (bubble) { const lbl = bubble.querySelectorAll(':scope > span')[1]; if (lbl) { VIP.ui._guestBubbleLbl = lbl.textContent; lbl.textContent = '🔑 INGRESAR / REGISTRARTE'; } }
+  setTimeout(function() { try { VIP.ui.openCasinoChat(); } catch (e) {} }, 300);
+  return true;
+};
+VIP.ui._guestExit = function() {
+  if (!VIP.ui._guestMode) return;
+  VIP.ui._guestMode = false;
+  VIP.ui._botStarted = false;
+  const box = document.querySelector('#guestAuthWrap .login-box');
+  const ph = VIP.ui._guestBoxPh;
+  if (box && ph && ph.parentNode) { ph.parentNode.insertBefore(box, ph); ph.remove(); }
+  VIP.ui._guestBoxPh = null;
+  const wrap = document.getElementById('guestAuthWrap'); if (wrap) wrap.remove();
+  const body = document.getElementById('casinoChatDrawerBody'); if (body) body.style.display = 'none';
+  const bot = document.getElementById('casinoBotArea'); if (bot) bot.style.display = 'flex';
+  const drawer = document.getElementById('casinoChatDrawer');
+  if (drawer) drawer.querySelectorAll('.cwBar, .cwFoot').forEach(function(el) { if (el.id !== 'casinoCommunityRow') el.style.display = 'flex'; });
+  const title = document.getElementById('casinoWidgetTitle'); if (title) title.textContent = 'Cargas Automáticas 1Girox';
+  const bubble = document.getElementById('casinoSupportBubble');
+  if (bubble && VIP.ui._guestBubbleLbl) { const lbl = bubble.querySelectorAll(':scope > span')[1]; if (lbl) lbl.textContent = VIP.ui._guestBubbleLbl; }
+  const overlay = document.getElementById('casinoOverlay'); if (overlay) overlay.style.zIndex = '99999';
+  try { VIP.ui.closeCasinoChat(); } catch (e) {}
+};
+
 VIP.ui.enterCasino = async function() {
   if (VIP.ui._casinoOpening) return; // anti doble-click
   VIP.ui._casinoOpening = true;
+  try { VIP.ui._guestExit(); } catch (e) {} // #288
 
   VIP.ui.closePlatformModal();
   VIP.ui._showCasinoFrame();   // recuadro visible YA, con "cargando"
@@ -964,6 +1047,7 @@ VIP.ui.enterCasino = async function() {
  */
 VIP.ui.enterCasinoWithUrl = function(url) {
   if (!url) return VIP.ui.enterCasino();
+  try { VIP.ui._guestExit(); } catch (e) {} // #288
   VIP.ui.closePlatformModal();
   VIP.ui._showCasinoFrame();
   VIP.ui._loadCasinoUrlFresh(url);
