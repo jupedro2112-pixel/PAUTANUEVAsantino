@@ -8,6 +8,10 @@
 
 ## Sesión 2026-09-24
 
+### 292. Cambiar contraseña: mínimo 6 caracteres (antes 8 en el front; el server ya aceptaba 6)
+- `index.html` (`minlength=6`, placeholder) y `auth.js` (`handleChangePassword`: 6 + letras
+  y números). Backend (`/api/auth/change-password`) y 1girox ya validaban ≥ 6. SW → v172.
+
 ### 291. "Mis datos" dorado + cambiar contraseña · INFORMACIÓN en acordeón · ruletas PREMIUM
 - **Mis datos:** recuadro con borde/degradé dorado (mismo tamaño), usuario y clave en
   "pills" doradas, botones copiar dorados y **🔑 Cambiar contraseña** (abre el modal de

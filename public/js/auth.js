@@ -993,11 +993,11 @@ VIP.auth = (function () {
             errorDiv.classList.add('show');
             return;
         }
-        // Contraseña SEGURA: mínimo 8 con al menos una letra y un número
+        // Contraseña: mínimo 6 (owner 2026-09-24, #292 — antes 8) con al menos una letra y un número
         // (endurecido 2026-08-03 junto con el flujo del link de acceso; el server
         // acepta ≥6, este es el piso del FRONT para claves nuevas).
-        if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-            errorDiv.textContent = 'La contraseña debe tener al menos 8 caracteres, con letras y números.';
+        if (newPassword.length < 6 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres, con letras y números.';
             errorDiv.classList.add('show');
             return;
         }
