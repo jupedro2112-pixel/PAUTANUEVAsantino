@@ -8,6 +8,17 @@
 
 ## Sesión 2026-09-24
 
+### 299. Widget: la opción abierta se nota (pestaña activa) y Depositar es pestaña propia
+- Owner: "que se diferencie según el recuadro que se elija… que en soporte se note
+  seleccionado… y que cada uno tenga su pestaña: pongo depositar y arriba aparece mi
+  usuario". `VIP.ui._setActiveTab(key)` marca el botón de la barra (`casinoTabDeposit`,
+  `casinoTabWithdraw`, `casinoSoporteBtn`, `casinoTabInfo`) con `.cwTabOn` (borde
+  dorado + brillo + flechita ▼ debajo). Lo llaman `casinoBotGo` (deposit/deposit-mode/
+  receipt/receipt-sent → Depositar; withdraw; info; home → ninguna), `casinoBotSupport`
+  (Soporte) y `casinoBotManualDeposit` (Depositar).
+- `deposit` y `deposit-mode` ahora limpian el área (como retiro e info): solo se ve lo
+  de depositar (antes se apilaba debajo del saludo + "Mis datos"). SW → v179. Solo front.
+
 ### 298. Hub PREMIOS: "Tus Reembolsos" (diario / semanal / mensual) cuando el cashback está apagado
 - Owner apagó el cashback instantáneo y el hub decía "🔒 Muy pronto". Ahora, con el
   cashback apagado, la tarjeta pasa a **"Tus Reembolsos"**: tres filas (☀️ Diario, 📆

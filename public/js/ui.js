@@ -1486,6 +1486,10 @@ VIP.ui._showCasinoFrame = function() {
       'body.wa-dark .cwSec{background:#2a3942;color:#e9edef;border:1px solid #3b4a54;}' +
       '.cwSop{background:#fff;color:#128c4a;border:1.5px solid #128c4a;}' +
       'body.wa-dark .cwSop{background:#2a3942;color:#25d366;border:1.5px solid #25d366;}' +
+      // #299: pestaña ACTIVA (la opción abierta se nota): borde dorado + brillo + flechita abajo.
+      '.cwBar button{position:relative;transition:transform .15s,box-shadow .15s;}' +
+      '.cwBar button.cwTabOn{outline:2px solid #ffd700;outline-offset:-2px;box-shadow:0 0 0 3px rgba(255,215,0,0.28),0 6px 16px rgba(0,0,0,0.35);transform:translateY(-1px);filter:brightness(1.12);}' +
+      '.cwBar button.cwTabOn::after{content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #ffd700;}' +
       '.cwWarn{background:#fff8e1;border:1px solid #f0c36d;color:#8a6d1a;}' +
       'body.wa-dark .cwWarn{background:#332b12;border:1px solid #6b5a22;color:#f0c36d;}' +
       '.cwIn{background:#fff;color:#111b21;border:1px solid #cfd6db;}' +
@@ -1577,9 +1581,9 @@ VIP.ui._showCasinoFrame = function() {
         // FILA FIJA de opciones (siempre a la vista, owner 2026-08-21 ref
         // Bet33): las 3 acciones ancladas bajo el header.
         '<div class="cwBar" style="flex:0 0 auto;display:flex;gap:6px;padding:8px;">' +
-          '<button type="button" onclick="VIP.ui.casinoBotGo(\'deposit\')" style="flex:1.2;background:#128c4a;' +
+          '<button type="button" id="casinoTabDeposit" onclick="VIP.ui.casinoBotGo(\'deposit\')" style="flex:1.2;background:#128c4a;' +
           'color:#fff;border:none;border-radius:9px;padding:10px 6px;font-size:12px;font-weight:800;cursor:pointer;">💳 Quiero Depositar</button>' +
-          '<button type="button" onclick="VIP.ui.casinoBotGo(\'withdraw\')" style="flex:1.2;background:#128c4a;' +
+          '<button type="button" id="casinoTabWithdraw" onclick="VIP.ui.casinoBotGo(\'withdraw\')" style="flex:1.2;background:#128c4a;' +
           'color:#fff;border:none;border-radius:9px;padding:10px 6px;font-size:12px;font-weight:800;cursor:pointer;">💲 Solicitar Retiro</button>' +
           '<button type="button" id="casinoSoporteBtn" class="cwSop" onclick="VIP.ui.casinoBotSupport()" style="flex:0.8;' +
           'position:relative;border-radius:9px;padding:10px 4px;font-size:12px;font-weight:800;cursor:pointer;">🎧 Soporte' +
@@ -1597,7 +1601,7 @@ VIP.ui._showCasinoFrame = function() {
           '🎁 PREMIOS' +
           '<span id="rwDot" style="display:none;position:absolute;top:-4px;right:-4px;width:13px;height:13px;' +
           'border-radius:50%;background:#e53935;border:2px solid #fff;box-shadow:0 0 8px rgba(229,57,53,0.9);"></span></button>' +
-          '<button type="button" class="cwSop" onclick="VIP.ui.casinoBotGo(\'info\')" style="flex:1;' +
+          '<button type="button" id="casinoTabInfo" class="cwSop" onclick="VIP.ui.casinoBotGo(\'info\')" style="flex:1;' +
           'border-radius:9px;padding:8px 4px;font-size:11.5px;font-weight:800;cursor:pointer;">ℹ️ ¿Cómo funciona?</button>' +
         '</div>' +
         // 3ª fila: 📣 COMUNIDAD de Telegram (#270). En el formato casino el pill
@@ -2209,6 +2213,7 @@ VIP.ui._depositModeChip = function() {
 VIP.ui.casinoBotManualDeposit = function() {
   VIP.ui._clearSupportUnread();
   VIP.ui._casinoChatMount();
+  VIP.ui._setActiveTab('deposit'); // #299
   const title = document.getElementById('casinoWidgetTitle');
   if (title) title.textContent = 'Carga con un agente';
   // Barra fina arriba del chat: modo actual + pasar a automática en 1 toque.
@@ -2234,9 +2239,24 @@ VIP.ui.casinoBotManualDeposit = function() {
   }, 600);
 };
 
+// #299: marca la opción abierta en la barra (deposit / withdraw / support /
+// info / null). Cada opción es una "pestaña": su contenido reemplaza al anterior.
+VIP.ui._setActiveTab = function(key) {
+  const map = { deposit: 'casinoTabDeposit', withdraw: 'casinoTabWithdraw', support: 'casinoSoporteBtn', info: 'casinoTabInfo' };
+  Object.keys(map).forEach(function(k) {
+    const el = document.getElementById(map[k]);
+    if (el) el.classList.toggle('cwTabOn', k === key);
+  });
+};
+
 VIP.ui.casinoBotGo = function(state) {
   const area = document.getElementById('casinoBotArea');
   if (!area) return;
+  // #299: pestaña activa según el estado.
+  VIP.ui._setActiveTab(
+    (state === 'deposit' || state === 'deposit-mode' || state === 'receipt' || state === 'receipt-sent') ? 'deposit' :
+    (state === 'withdraw' ? 'withdraw' : (state === 'info' ? 'info' : null))
+  );
   // Si el chat vivo estaba montado (soporte), volver los nodos a la página.
   if (VIP.ui._casinoChatPh) VIP.ui._casinoChatRestoreNodes();
   area.style.display = 'flex';
@@ -2319,6 +2339,7 @@ VIP.ui.casinoBotGo = function(state) {
   }
 
   if (state === 'deposit-mode') {
+    area.innerHTML = '';
     const cur = VIP.ui._depositMode();
     const opt = function(mode, icon, titulo, desc, tag) {
       const sel = cur === mode;
@@ -2343,6 +2364,9 @@ VIP.ui.casinoBotGo = function(state) {
     const mode = VIP.ui._depositMode();
     if (!mode) { VIP.ui.casinoBotGo('deposit-mode'); return; }
     if (mode === 'manual') { VIP.ui.casinoBotManualDeposit(); return; }
+    // #299: pestaña propia — solo lo de depositar (antes se apilaba debajo del
+    // saludo + "Mis datos" y al scrollear aparecía el usuario arriba del CBU).
+    area.innerHTML = '';
     let card = document.getElementById('botDepositCard');
     // THROTTLE anti-spam: doble-tap en <2s no hace nada (evita apilar).
     if (card && (Date.now() - (VIP.ui._botDepositAt || 0) < 2000)) {
@@ -2719,6 +2743,7 @@ VIP.ui._clearSupportUnread = function() {
 VIP.ui.casinoBotSupport = function() {
   VIP.ui._clearSupportUnread(); // el usuario entra a ver soporte → sin pendientes
   VIP.ui._casinoChatMount();
+  VIP.ui._setActiveTab('support'); // #299
   // Bienvenida automática del soporte (server-side, editable en COMANDOS como
   // /sys_soporte_bienvenida, con throttle para no spamear al agente). El
   // mensaje llega por socket y aparece en el chat recién montado.
