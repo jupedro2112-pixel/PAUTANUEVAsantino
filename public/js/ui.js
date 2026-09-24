@@ -1067,6 +1067,11 @@ VIP.ui._guestExit = function() {
   if (!VIP.ui._guestMode) return;
   VIP.ui._guestMode = false;
   document.body.classList.remove('guest-premium');
+  // #290b: el overlay quedó abierto en modo invitado, y los callers del login
+  // (`if (!VIP.ui._casinoOpen) enterCasino()`) lo tomaban como "ya está en el
+  // casino" → no cargaban el SSO ni refrescaban PREMIOS hasta recargar la
+  // página. Se baja la bandera: _showCasinoFrame reusa el overlay igual.
+  VIP.ui._casinoOpen = false;
   VIP.ui._botStarted = false;
   const box = document.querySelector('#guestAuthWrap .login-box');
   const ph = VIP.ui._guestBoxPh;

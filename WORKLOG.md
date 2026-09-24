@@ -8,6 +8,13 @@
 
 ## Sesión 2026-09-24
 
+### 290b. FIX: al loguearse desde el modo invitado no cargaba el SSO ni aparecía PREMIOS (hasta F5)
+- **Causa:** el overlay del casino ya estaba abierto en modo invitado (`_casinoOpen=true`) y
+  los callers del login hacen `if (!_casinoOpen) enterCasino()` → salteaban la entrada
+  real: el iframe quedaba en el sitio público y `_refreshRewards` (que corre en
+  `_showCasinoFrame`) no se ejecutaba. **Fix:** `_guestExit` baja `_casinoOpen`;
+  `_showCasinoFrame` reusa el overlay y carga el SSO. SW → v170.
+
 ### 290. Widget: "🪪 Mis datos" siempre a mano + 🎁 PREMIOS siempre visible
 - **Pedido owner:** que usuario y clave estén en un apartado fijo (antes solo salían al
   inicio del asistente y desaparecían al pedir la carga); y en Render no veía PREMIOS.
