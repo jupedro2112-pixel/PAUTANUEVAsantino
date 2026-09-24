@@ -1,0 +1,145 @@
+/* ============================================================
+   MODO INVITADO — skin PREMIUM del recuadro de Ingresar/Registrarse (#288b)
+   El recuadro real (.login-box) se muda adentro del widget del casino con
+   TODOS sus nodos (ids/listeners intactos). Este archivo solo lo VISTE:
+   esconde los bloques viejos (fila de soporte, banner, "Sala de juegos VIP",
+   cartel de teléfono, "¿No tienes cuenta?", "Recuperar") y muestra los
+   elementos nuevos (.gp-only: cabecera, tabs, pie con accesos) que ui.js
+   inyecta y que funcionan como PROXIES de los botones originales.
+   Fuera del modo invitado (pantalla vieja de login, fallback) nada de esto
+   aplica: .gp-only queda oculto.
+   ============================================================ */
+.gp-only { display: none; }
+.guest-premium .gp-only { display: block; }
+.guest-premium .gp-hide { display: none !important; }
+
+#guestAuthWrap.guest-premium {
+    background: radial-gradient(120% 80% at 50% 0%, rgba(212,175,55,0.10) 0%, rgba(0,0,0,0) 55%), #0b0f1e;
+}
+.guest-premium .login-box {
+    background: linear-gradient(165deg, #10182f 0%, #0b1022 60%, #0b1020 100%);
+    border: 1px solid rgba(212,175,55,0.35);
+    border-radius: 18px;
+    padding: 16px 14px 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    max-width: none;
+    margin: 0;
+    text-align: left;
+    backdrop-filter: none;
+}
+
+/* Cabecera */
+.guest-premium .gp-head { text-align: center; margin-bottom: 10px; }
+.guest-premium .gp-logo {
+    width: 58px; height: 58px; border-radius: 50%; object-fit: cover;
+    border: 2px solid #d4af37; box-shadow: 0 0 24px rgba(212,175,55,0.45);
+}
+.guest-premium .gp-brand {
+    font-size: 23px; font-weight: 900; letter-spacing: 2.5px; margin: 8px 0 2px;
+    background: linear-gradient(90deg, #f7e08a 0%, #d4af37 50%, #b8860b 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.guest-premium .gp-tag { font-size: 11.5px; color: #9fb0c3; letter-spacing: .2px; }
+
+/* Ticker "EN VIVO" (existente) */
+.guest-premium #loginClaimsTicker {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(37,211,102,0.25) !important;
+    border-radius: 12px !important; padding: 8px 10px !important; margin: 0 0 12px !important;
+}
+
+/* Tabs Ingresar / Crear cuenta */
+.guest-premium .gp-tabs {
+    display: flex; gap: 4px; padding: 4px; margin: 12px 0 14px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+}
+.guest-premium .gp-tab {
+    flex: 1; border: none; background: transparent; color: #9fb0c3;
+    font-weight: 800; font-size: 13px; padding: 10px 6px; border-radius: 11px; cursor: pointer;
+    transition: background .2s, color .2s;
+}
+.guest-premium .gp-tab.active {
+    background: linear-gradient(135deg, #f5d16a, #c99a2e); color: #1a1200;
+    box-shadow: 0 6px 16px rgba(212,175,55,0.35);
+}
+
+/* Campos */
+.guest-premium .input-group { margin-bottom: 12px; text-align: left; }
+.guest-premium .input-group label {
+    display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .8px;
+    text-transform: uppercase; color: #c9b26a; margin-bottom: 6px;
+}
+.guest-premium .input-group input,
+.guest-premium .input-group select {
+    width: 100%; box-sizing: border-box; color: #fff; font-size: 15px; outline: none;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(212,175,55,0.28);
+    border-radius: 12px; padding: 13px 14px; transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.guest-premium .input-group input::placeholder { color: #6f7d90; }
+.guest-premium .input-group input:focus {
+    border-color: #f5d16a; box-shadow: 0 0 0 3px rgba(212,175,55,0.18); background: rgba(255,255,255,0.09);
+}
+
+/* Botón principal (el submit REAL del form) */
+.guest-premium #loginForm button[type="submit"] {
+    width: 100%; border: none; border-radius: 14px; padding: 15px; margin-top: 4px;
+    font-size: 16px; font-weight: 900; letter-spacing: .3px; color: #1a1200; cursor: pointer;
+    background: linear-gradient(135deg, #f7e08a 0%, #d4af37 50%, #b8860b 100%);
+    box-shadow: 0 10px 26px rgba(212,175,55,0.35);
+}
+.guest-premium #loginForm button[type="submit"]:active { transform: scale(.985); }
+/* Botones secundarios del form (verificar código, etc.) */
+.guest-premium #loginForm .btn-primary:not([type="submit"]) {
+    width: 100%; border: none; border-radius: 12px; padding: 12px; font-weight: 800;
+    background: rgba(212,175,55,0.16); color: #f5d16a; border: 1px solid rgba(212,175,55,0.4); cursor: pointer;
+}
+
+/* Error */
+.guest-premium .error-message { margin-top: 10px; border-radius: 10px; }
+
+/* Pie: confianza + accesos */
+.guest-premium .gp-trust { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 14px 0 4px; }
+.guest-premium .gp-trust span {
+    font-size: 10.5px; color: #b9c6d6; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 5px 9px;
+}
+.guest-premium .gp-forgot {
+    display: block; width: 100%; text-align: center; margin: 10px 0 0; background: none; border: none;
+    color: #9fb0c3; font-size: 12.5px; text-decoration: underline; cursor: pointer;
+}
+.guest-premium .gp-links { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+.guest-premium .gp-link {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.3); color: #e9d8a6;
+    border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.guest-premium .gp-note { font-size: 11px; color: #8a97a8; text-align: center; margin-top: 10px; line-height: 1.4; }
+
+/* ---- Modales del login (registro, recuperar clave, reseñas, regalos) con la
+   misma estética mientras es invitado (body.guest-premium) ---- */
+body.guest-premium .modal-content {
+    background: linear-gradient(165deg, #10182f 0%, #0b1022 60%, #0b1020 100%);
+    border: 1px solid rgba(212,175,55,0.45);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+body.guest-premium .modal-header h2 {
+    background: linear-gradient(90deg, #f7e08a 0%, #d4af37 50%, #b8860b 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+body.guest-premium .modal-content .input-group label {
+    font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: #c9b26a;
+}
+body.guest-premium .modal-content .input-group input,
+body.guest-premium .modal-content .input-group select {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(212,175,55,0.28); border-radius: 12px;
+    color: #fff; padding: 13px 14px; font-size: 15px;
+}
+body.guest-premium .modal-content .input-group input:focus {
+    border-color: #f5d16a; box-shadow: 0 0 0 3px rgba(212,175,55,0.18);
+}
+body.guest-premium .modal-content .btn-primary {
+    background: linear-gradient(135deg, #f7e08a 0%, #d4af37 50%, #b8860b 100%);
+    color: #1a1200; border: none; border-radius: 14px; font-weight: 900; box-shadow: 0 10px 26px rgba(212,175,55,0.3);
+}
+body.guest-premium .modal-content .btn-secondary {
+    background: rgba(255,255,255,0.05); color: #cfd6de; border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+}

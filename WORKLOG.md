@@ -8,6 +8,23 @@
 
 ## Sesión 2026-09-24
 
+### 288b. Modo invitado con skin PREMIUM (owner: "algo más premium, no la copia de lo viejo")
+- **`public/css/guest.css`** (scope `.guest-premium`): recuadro oscuro con degradé y borde
+  dorado, cabecera con logo redondo 1GIROX + marca en dorado degradé + tagline, **tabs
+  "🔑 Ingresar / 📝 Crear cuenta"**, campos grandes con foco dorado, botón principal
+  dorado full-width, ticker EN VIVO integrado, chips de confianza (pagos seguros /
+  carga automática / bono 1ª carga), link "¿Olvidaste tu contraseña?", accesos
+  📣 Soporte Telegram · ⭐ Reseñas · 🎁 Regalos, nota de verificar teléfono. Los modales
+  (registro, recuperar, reseñas, regalos) reciben la misma estética vía
+  `body.guest-premium`.
+- **`ui.js._guestSkin(box)`**: NO cambia la lógica — esconde los bloques viejos
+  (`.gp-hide`) e inyecta cabecera/tabs/pie (`.gp-only`) que hacen `click()` sobre los
+  botones REALES (`registerBtn`, `findUserBtn`, `helpTelegramBtn`, `loginReviewsBtn`,
+  `loginGiftsBtn`). El submit del form es el original (así la personalización del
+  publicista "Entrá YA…" sigue aplicando); el tab de registro se sincroniza con
+  `registerBtn` (oculto/renombrado por publicista o referido). Fuera del modo invitado
+  `.gp-only` no se ve → la pantalla vieja (fallback) queda intacta. SW → v167.
+
 ### 288. MODO INVITADO: sin sesión se ve el casino de fondo + el widget con Ingresar/Registrarse
 - **Pedido owner:** que quien no está logueado vea lo mismo que un cliente (el casino que
   usamos de fondo) y que el widget, en vez del chat/soporte, ofrezca ingresar o

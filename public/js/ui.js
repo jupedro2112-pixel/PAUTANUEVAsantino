@@ -975,18 +975,88 @@ VIP.ui.enterCasinoGuest = function() {
         box.parentNode.insertBefore(ph, box);
         VIP.ui._guestBoxPh = ph;
       }
+      wrap.classList.add('guest-premium');
       wrap.appendChild(box);
       body.style.display = 'flex';
+      try { VIP.ui._guestSkin(box); } catch (e) {}
     }
   }
+  document.body.classList.add('guest-premium'); // skin de los modales (registro, recuperar, etc.)
   const bubble = document.getElementById('casinoSupportBubble');
   if (bubble) { const lbl = bubble.querySelectorAll(':scope > span')[1]; if (lbl) { VIP.ui._guestBubbleLbl = lbl.textContent; lbl.textContent = '🔑 INGRESAR / REGISTRARTE'; } }
   setTimeout(function() { try { VIP.ui.openCasinoChat(); } catch (e) {} }, 300);
   return true;
 };
+// Skin PREMIUM del recuadro (#288b, owner: "algo más premium, no una copia
+// de lo que había"). No se rediseña la lógica: los nodos originales siguen
+// ahí (ids/listeners/flujos intactos); se ESCONDEN los bloques viejos y se
+// agregan cabecera, tabs y pie (.gp-only) que actúan de PROXY de los botones
+// reales (Registrarse, Recuperar, Soporte Telegram, Reseñas, Regalos). El CSS
+// vive en /css/guest.css y solo aplica dentro de .guest-premium.
+VIP.ui._guestSkin = function(box) {
+  const form = document.getElementById('loginForm');
+  if (!box || !form) return;
+  const syncTabs = function() {
+    const rb = document.getElementById('registerBtn');
+    const tab = document.getElementById('gpTabRegister');
+    if (!tab) return;
+    tab.style.display = (!rb || rb.style.display === 'none') ? 'none' : '';
+    if (rb && /referido/i.test(rb.textContent || '')) tab.textContent = '🤝 Registrarse con código';
+  };
+  if (box._gpSkinned) { syncTabs(); return; }
+  box._gpSkinned = true;
+  // 1) Esconder los bloques viejos (se identifican por lo que contienen).
+  Array.from(box.children).forEach(function(el) {
+    if (el.id === 'loginForm' || el.id === 'loginClaimsTicker' || el.id === 'errorMessage') return;
+    if (el.querySelector && el.querySelector('#helpTelegramBtn, #loginReviewsBtn, #loginGiftsBtn, #registerBtn, #findUserBtn')) { el.classList.add('gp-hide'); return; }
+    if (el.tagName === 'P') { el.classList.add('gp-hide'); return; }
+    if (/Verific/i.test(el.textContent || '')) { el.classList.add('gp-hide'); return; }
+  });
+  // 2) Cabecera premium.
+  const head = document.createElement('div');
+  head.className = 'gp-only gp-head';
+  head.innerHTML = '<img class="gp-logo" src="/images/soporte-1girox.png" alt="1GIROX">' +
+    '<div class="gp-brand">1GIROX</div>' +
+    '<div class="gp-tag">Sala de juegos VIP · Cargas automáticas 24/7</div>';
+  box.insertBefore(head, box.firstChild);
+  // 3) Tabs Ingresar / Crear cuenta (el segundo dispara el botón REAL de registro).
+  const tabs = document.createElement('div');
+  tabs.className = 'gp-only gp-tabs';
+  tabs.innerHTML = '<button type="button" class="gp-tab active">🔑 Ingresar</button>' +
+    '<button type="button" class="gp-tab" id="gpTabRegister">📝 Crear cuenta</button>';
+  box.insertBefore(tabs, form);
+  tabs.querySelector('#gpTabRegister').addEventListener('click', function() {
+    const b = document.getElementById('registerBtn'); if (b) b.click();
+  });
+  // 4) Pie: confianza + recuperar clave + accesos (proxies de los botones reales).
+  const foot = document.createElement('div');
+  foot.className = 'gp-only gp-foot';
+  foot.innerHTML =
+    '<div class="gp-trust"><span>🔒 Pagos seguros</span><span>⚡ Carga automática</span><span>🎁 Bono en tu 1ª carga</span></div>' +
+    '<button type="button" class="gp-forgot" id="gpForgot">¿Olvidaste tu contraseña? Recuperala</button>' +
+    '<div class="gp-links">' +
+      '<button type="button" class="gp-link" id="gpTg">📣 Soporte Telegram</button>' +
+      '<button type="button" class="gp-link" id="gpRev">⭐ Reseñas</button>' +
+      '<button type="button" class="gp-link" id="gpGift">🎁 Regalos</button>' +
+    '</div>' +
+    '<div class="gp-note">🔒 Verificá tu teléfono después de entrar: recuperás la cuenta y retirás sin problemas.</div>';
+  form.insertAdjacentElement('afterend', foot);
+  const proxy = function(fromId, toId) {
+    const a = document.getElementById(fromId), b = document.getElementById(toId);
+    if (a && b) a.addEventListener('click', function() { b.click(); });
+    else if (a) a.style.display = 'none';
+  };
+  proxy('gpForgot', 'findUserBtn'); proxy('gpTg', 'helpTelegramBtn'); proxy('gpRev', 'loginReviewsBtn'); proxy('gpGift', 'loginGiftsBtn');
+  syncTabs();
+  // La personalización del publicista (applyLoginCustomizations) puede llegar
+  // después y ocultar/renombrar "Registrarse" → se re-sincroniza un par de veces.
+  setTimeout(syncTabs, 400); setTimeout(syncTabs, 1500);
+};
+
 VIP.ui._guestExit = function() {
   if (!VIP.ui._guestMode) return;
   VIP.ui._guestMode = false;
+  document.body.classList.remove('guest-premium');
   VIP.ui._botStarted = false;
   const box = document.querySelector('#guestAuthWrap .login-box');
   const ph = VIP.ui._guestBoxPh;
