@@ -646,6 +646,11 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   2 hs, nota adminOnly al panel). `POST /api/user/deposit-mode` guarda la elección;
   `/api/rewards/summary.depositMode` la sincroniza entre dispositivos (localStorage
   `vip_deposit_mode`). Panel: etiqueta 💬 CARGA MANUAL / ⚡ AUTO junto al nombre del chat.
+- **Bonos aplicados dentro de una carga (#303):** % de ruleta diaria/bienvenida, bono
+  1ª carga y lote dejan además una Transaction `bonus` propia
+  (`_recordAppliedBonusTx`, `metadata.appliedOnDeposit:true` → la base del cashback
+  la excluye porque ya cuenta `deposit.bonus`); el giro diario pasa a
+  `percent_used` (`_markDailySpinPctUsed`).
 - **Hub "🎁 PREMIOS" + Ruleta diaria v2 + Cashback instantáneo (#254, 2026-09-01).**
   Botón flotante `#casinoRewardsBtn` (izquierda del casino, puntito rojo si hay algo
   reclamable) → overlay `#rwHubOverlay` con 3 tarjetas; `GET /api/rewards/summary` trae

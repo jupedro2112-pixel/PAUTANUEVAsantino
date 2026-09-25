@@ -8,6 +8,27 @@
 
 ## Sesión 2026-09-25
 
+### 303. Premios "% EXTRA en la próxima carga": Bonificación propia en Transacciones + marcados en Ruleta diaria
+- Owner: los premios en SALDO se veían, pero cuando el cliente cobraba el % de la ruleta
+  diaria en una carga, no aparecía en Bonificaciones ni la Ruleta diaria mostraba que lo
+  reclamó. Causa: el bono iba solo en `deposit.bonus` (sin Transaction 'bonus') y el giro
+  quedaba en `percent_pending` para siempre.
+- Backend: `_recordAppliedBonusTx()` crea una Transaction `type:'bonus'` por cada bono
+  automático aplicado dentro de una carga (ruleta diaria → "Ruleta diaria — 20% EXTRA
+  aplicado en carga de $X"; ruleta de bienvenida; bono 1ª carga (`metadata.source
+  'first_charge_bonus'`); lote con regalo) con `metadata.appliedOnDeposit:true` +
+  `depositTxId`. La base del cashback (`_giftExpr`) EXCLUYE esas (ya cuenta
+  `deposit.bonus`) → sin doble descuento. `_markDailySpinPctUsed()` pasa el giro a
+  **`percent_used`** con `usedAt/usedBy/usedOnAmount/usedBonusARS` (también cuando el
+  agente carga bonus a mano y el premio se consume: `usedBonusARS 0`). Llamado en la
+  auto-carga hgcash y en `/api/admin/deposit`. Stats `byDay`/`totals` suman
+  `pctWon/pctUsed/pctBonus`.
+- Panel (admin-sw v60): Ruleta diaria → cards "% EXTRA aplicados / ganados" y "$ Bono
+  por % EXTRA", columnas por día, historial con badges "🎁 % PENDIENTE" / "✅ %
+  APLICADO" + "$bono sobre carga $X · fecha · quién". Transacciones → Bonificaciones
+  lista los bonos aplicados con origen (🎰 ruleta diaria / 🎡 bienvenida / 🎁 bono 1ª
+  carga / 🎁 lote). Los giros anteriores al deploy siguen como estaban.
+
 ### 302. Chats "Sin mensajes" en Cerrados (sin mensaje de registro)
 - Owner (panel de la cuenta vieja): chats de usuarios recién registrados aparecían en
   Cerrados sin ningún mensaje. Causa: el alta por la APP creaba el `ChatStatus` con

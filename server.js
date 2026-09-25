@@ -625,6 +625,52 @@ async function claimDailyRoulettePercent(userId, usedBy) {
     return { pct: 0, claimed: false };
   }
 }
+// #303 (owner 2026-09-25): los bonos que se aplican ADENTRO de una carga (% de
+// la ruleta diaria / bienvenida, bono 1ª carga, lote con regalo) quedaban solo
+// en el campo `bonus` del depósito → invisibles en Transacciones → Bonificaciones
+// y sin marca en la sección Ruleta diaria. Ahora dejan una Transaction 'bonus'
+// propia (con descripción clara y metadata.appliedOnDeposit=true para que la
+// base del cashback NO la cuente dos veces: ya cuenta deposit.bonus) y el giro
+// de la ruleta diaria pasa a 'percent_used' con cuándo / quién / cuánto.
+async function _recordAppliedBonusTx(o) {
+  try {
+    const bonus = Number(o.bonusAmount) || 0;
+    if (!(bonus > 0) || !o.user) return null;
+    const amt = Number(o.depositAmount) || 0;
+    const fmt = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+    const kinds = {
+      daily_roulette:     { source: 'daily_roulette',     desc: `Ruleta diaria — ${o.label || (o.pct + '% EXTRA')} aplicado en carga de ${fmt(amt)}` },
+      welcome_roulette:   { source: 'welcome_roulette',   desc: `Ruleta de bienvenida — ${o.label || (o.pct + '%')} aplicado en carga de ${fmt(amt)}` },
+      first_charge:       { source: 'first_charge_bonus', desc: `Bono de 1ª carga — sobre carga de ${fmt(amt)}` },
+      auto_promo:         { source: 'notif_batch',        desc: `Lote con regalo — ${o.label || (o.pct + '%')} aplicado en carga de ${fmt(amt)}` }
+    };
+    const k = kinds[o.kind]; if (!k) return null;
+    const tx = await Transaction.create({
+      id: uuidv4(), type: 'bonus', amount: bonus, username: o.user.username, userId: o.user.id,
+      description: k.desc,
+      adminUsername: o.adminUsername || 'auto', adminRole: o.adminRole || 'system',
+      transactionId: o.transactionId || null,
+      metadata: { source: k.source, appliedOnDeposit: true, depositTxId: o.depositTxId || null, depositAmount: amt, pct: Number(o.pct) || 0, label: o.label || null },
+      timestamp: new Date()
+    });
+    return tx;
+  } catch (e) {
+    logger.warn(`[bonus-tx] no se pudo registrar el bono aplicado (${o && o.kind}) de ${o && o.user && o.user.username}: ${e.message}`);
+    return null;
+  }
+}
+async function _markDailySpinPctUsed(userId, o) {
+  try {
+    await DailyRouletteSpin.findOneAndUpdate(
+      { userId: String(userId), status: 'percent_pending' },
+      { $set: { status: 'percent_used', usedAt: new Date(), usedBy: (o && o.usedBy) || 'auto',
+                usedOnAmount: Number(o && o.depositAmount) || 0, usedBonusARS: Number(o && o.bonusAmount) || 0,
+                creditTxId: (o && o.txId) || null } },
+      { sort: { spunAt: -1 } }
+    );
+  } catch (e) { logger.warn(`[ROULETTE] no se pudo marcar el % como usado (${userId}): ${e.message}`); }
+}
+
 async function revertDailyRoulettePercent(userId, pct, label) {
   try {
     if (!(pct > 0)) return;
@@ -2758,7 +2804,7 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
     charged = true; // ya acreditó: cualquier error posterior NO debe disparar reintento
 
     try { await recordUserActivity(user.id, 'deposit', Number(amount)); } catch (_) {}
-    await Transaction.create({
+    const _hgDepTx = await Transaction.create({
       id: uuidv4(), type: 'deposit', amount: Number(amount),
       bonus: _hgBonusApplied ? _hgBonus : 0,
       username: user.username, userId: user.id,
@@ -2768,6 +2814,19 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
       metadata: { source: 'auto_hgcash', movementId: movement.movementId, comprobanteId: comprobante.id },
       timestamp: new Date()
     });
+    // #303: el bono aplicado adentro de la carga queda como Bonificación propia
+    // (y el giro de la ruleta diaria, marcado como usado).
+    if (_hgBonusApplied) {
+      const _bk = _rouHg.claimed ? (_rouHgKind === 'daily' ? 'daily_roulette' : 'welcome_roulette')
+        : (_fcbHg.claimed ? 'first_charge' : (_loteHg.claimed ? 'auto_promo' : null));
+      if (_bk) {
+        await _recordAppliedBonusTx({ user, kind: _bk, pct: _rouHg.claimed ? _rouHg.pct : (_loteHg.claimed ? _loteHg.pct : 0),
+          label: _rouHg.claimed ? _rouHg.label : (_loteHg.claimed ? _loteHg.label : null), bonusAmount: _hgBonus,
+          depositAmount: Number(amount), depositTxId: _hgDepTx && _hgDepTx.id, transactionId: _hgDepTx && _hgDepTx.transactionId,
+          adminUsername: 'auto-hgcash', adminRole: 'system' });
+        if (_bk === 'daily_roulette') await _markDailySpinPctUsed(user.id, { usedBy: 'auto-hgcash', depositAmount: Number(amount), bonusAmount: _hgBonus, txId: _hgDepTx && _hgDepTx.id });
+      }
+    }
 
     // Meta CAPI — Purchase (la AUTO-CARGA no lo disparaba → los partners no
     // recibían la venta; owner 2026-08-24). Con la IP/UA del jugador (mejor
@@ -9346,11 +9405,25 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
           }
           const _rcmD = await claimDailyRoulettePercent(user.id, _roulBy);
           if (_rcmD.claimed) {
+            await _markDailySpinPctUsed(user.id, { usedBy: 'bonus manual de ' + _roulBy, depositAmount: parseFloat(amount), bonusAmount: 0, txId: _depTxId }); // #303
             await _emitAdminOnlyChatNote(user.id, user.username,
               `🎡 Ruleta DIARIA: tenía ${_rcmD.pct}% pendiente y el agente cargó bonus manual → premio marcado como USADO (no se suma aparte).`);
           }
         }
       } catch (_) {}
+      // #303: Bonificación propia por el bono automático aplicado en esta carga
+      // (ruleta diaria / bienvenida / 1ª carga / lote) + giro diario → usado.
+      if (bonusActuallyApplied && _autoBonus > 0) {
+        const _bk = _roulClaimed ? (_roulKind === 'daily' ? 'daily_roulette' : 'welcome_roulette')
+          : (_fcbClaimed ? 'first_charge' : (_loteClaim ? 'auto_promo' : null));
+        if (_bk) {
+          await _recordAppliedBonusTx({ user, kind: _bk, pct: _roulClaimed ? _roulPct : _lotePct, label: _roulClaimed ? _roulLabel : (_loteClaim && _loteClaim.label),
+            bonusAmount: _autoBonus, depositAmount: parseFloat(amount), depositTxId: _depTxId,
+            transactionId: result.data?.transfer_id || result.data?.transferId,
+            adminUsername: req.user?.username || 'auto', adminRole: req.user?.role || 'admin' });
+          if (_bk === 'daily_roulette') await _markDailySpinPctUsed(user.id, { usedBy: _roulBy, depositAmount: parseFloat(amount), bonusAmount: _autoBonus, txId: _depTxId });
+        }
+      }
 
       // hgcash: si esta carga MANUAL corresponde a una transferencia hgcash pendiente
       // de ese usuario (mismo monto), marcarla como cargada → no se auto-carga después.
@@ -12843,9 +12916,11 @@ async function _cashbackStateToday(userId, username, opts) {
   // $C y cobraba pct×C de nuevo. Ahora: pierde $C de reembolso → lifeNet+C y
   // gifted+C se cancelan → $0. Coincide con el `granted` de la plataforma (que
   // también los cuenta, porque van por /bonus).
+  // #303: las Transactions 'bonus' con appliedOnDeposit=true son el MISMO bono
+  // que ya está en deposit.bonus → no se suman dos veces.
   const _giftExpr = { $add: [
     { $cond: [{ $eq: ['$type', 'deposit'] }, { $ifNull: ['$bonus', 0] }, 0] },
-    { $cond: [{ $in: ['$type', GIFT_TX_TYPES] }, '$amount', 0] }
+    { $cond: [{ $and: [{ $in: ['$type', GIFT_TX_TYPES] }, { $ne: ['$metadata.appliedOnDeposit', true] }] }, '$amount', 0] }
   ] };
   const giftAgg = await Transaction.aggregate([
     { $match: { userId: String(userId), type: { $in: ['deposit', ...GIFT_TX_TYPES] }, timestamp: { $gte: _giftFrom } } },
@@ -19643,7 +19718,11 @@ app.get('/api/admin/roulette/stats', authMiddleware, adminMiddleware, async (req
           spins: { $sum: 1 },
           winners: { $sum: { $cond: [{ $gt: ['$prizeARS', 0] }, 1, 0] } },
           totalGiven: { $sum: { $cond: [{ $eq: ['$status', 'credited'] }, '$prizeARS', 0] } },
-          totalPending: { $sum: { $cond: [{ $eq: ['$status', 'credit_failed'] }, '$prizeARS', 0] } }
+          totalPending: { $sum: { $cond: [{ $eq: ['$status', 'credit_failed'] }, '$prizeARS', 0] } },
+          // #303: premios % EXTRA (para la próxima carga): ganados, aplicados y $ que generaron.
+          pctWon: { $sum: { $cond: [{ $eq: ['$prizeType', 'percent'] }, 1, 0] } },
+          pctUsed: { $sum: { $cond: [{ $eq: ['$status', 'percent_used'] }, 1, 0] } },
+          pctBonus: { $sum: { $cond: [{ $eq: ['$status', 'percent_used'] }, { $ifNull: ['$usedBonusARS', 0] }, 0] } }
         }},
         { $sort: { _id: -1 } }
       ]),
@@ -19659,7 +19738,10 @@ app.get('/api/admin/roulette/stats', authMiddleware, adminMiddleware, async (req
           spinsTotal: { $sum: 1 },
           winnersTotal: { $sum: { $cond: [{ $gt: ['$prizeARS', 0] }, 1, 0] } },
           givenTotal: { $sum: { $cond: [{ $eq: ['$status', 'credited'] }, '$prizeARS', 0] } },
-          pendingTotal: { $sum: { $cond: [{ $eq: ['$status', 'credit_failed'] }, '$prizeARS', 0] } }
+          pendingTotal: { $sum: { $cond: [{ $eq: ['$status', 'credit_failed'] }, '$prizeARS', 0] } },
+          pctWonTotal: { $sum: { $cond: [{ $eq: ['$prizeType', 'percent'] }, 1, 0] } },
+          pctUsedTotal: { $sum: { $cond: [{ $eq: ['$status', 'percent_used'] }, 1, 0] } },
+          pctBonusTotal: { $sum: { $cond: [{ $eq: ['$status', 'percent_used'] }, { $ifNull: ['$usedBonusARS', 0] }, 0] } }
         }}
       ])
     ]);
