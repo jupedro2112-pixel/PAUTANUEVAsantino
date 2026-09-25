@@ -3950,6 +3950,23 @@ app.post('/api/auth/register', authLimiter, registerIpLimiter, async (req, res) 
       lastMessageAt: new Date()
     });
 
+    // #302 (owner 2026-09-25: "chats vacíos sin ningún msj ni de registro"):
+    // el alta por la APP deja SIEMPRE el mensaje de registro con usuario+clave
+    // en el chat (igual que la landing). Antes dependía de que el cliente
+    // llamara /api/messages/welcome y de que /sys_welcome no estuviera vacío →
+    // si algo de eso fallaba, el chat aparecía en Cerrados sin ningún mensaje.
+    try {
+      await Message.create({
+        id: uuidv4(),
+        senderId: 'system', senderUsername: 'Sistema', senderRole: 'admin',
+        receiverId: userId, receiverRole: 'user',
+        content: `🎉 ¡Tu cuenta está creada!\n\n👤 Usuario: ${username}\n🔑 Clave: ${password}\n\n📌 Guardalos para volver a entrar cuando quieras desde ${getPublicBaseUrl()}`,
+        type: 'system', timestamp: new Date(), read: false, metadata: { kind: 'registered' }
+      });
+    } catch (regMsgErr) {
+      logger.warn(`[register] no se pudo dejar el mensaje de registro en el chat de ${username}: ${regMsgErr.message}`);
+    }
+
     // Generar token con expiración de 90 días
     const token = jwt.sign(
       { userId: newUser.id, username: newUser.username, role: newUser.role, tokenVersion: newUser.tokenVersion ?? 0 },
@@ -6470,9 +6487,11 @@ app.post('/api/messages/welcome', authMiddleware, async (req, res) => {
     if (_welcomeUser && _welcomeUser.acquisitionSource === 'landing') {
       // Si no existe, nace CERRADO ($setOnInsert): la bienvenida es automática,
       // no abre chats. Si ya existe, no se toca el status.
+      // #302: sin mensaje nuevo NO se sube lastMessageAt (si no, el chat
+      // aparecía arriba en Cerrados "sin mensajes").
       await ChatStatus.findOneAndUpdate(
         { userId },
-        { $set: { userId, username, lastMessageAt: new Date() }, $setOnInsert: { status: 'closed', category: 'cargas' } },
+        { $set: { userId, username }, $setOnInsert: { status: 'closed', category: 'cargas', lastMessageAt: new Date() } },
         { upsert: true }
       );
       return res.json({ success: true, skipped: 'landing' });
@@ -6526,9 +6545,10 @@ app.post('/api/messages/welcome', authMiddleware, async (req, res) => {
       notifyAdmins('new_message', { message: data, userId, username });
     };
 
-    if (welcomeContent) await createSystemMessage(welcomeContent, true); // null = /sys_welcome vaciado
+    let _sentAny = false;
+    if (welcomeContent) { await createSystemMessage(welcomeContent, true); _sentAny = true; } // null = /sys_welcome vaciado
     if (cbuNumber && cbuNumber !== 'No disponible') {
-      await createSystemMessage(cbuNumber, false);
+      await createSystemMessage(cbuNumber, false); _sentAny = true;
     }
 
     // Crear/actualizar el ChatStatus recién ahora — cuando el usuario ingresa y
@@ -6537,13 +6557,16 @@ app.post('/api/messages/welcome', authMiddleware, async (req, res) => {
     // vacíos en el panel. lastMessageAt=now hace que el chat aparezca arriba
     // (en Cerrados: la bienvenida es automática → nace 'closed' vía $setOnInsert;
     // si ya existía, el status no se toca — regla owner 2026-08-25/27).
+    // #302: lastMessageAt solo si de verdad se creó un mensaje; si /sys_welcome
+    // está vacío y no hay CBU, el chat no se "toca" (no aparece vacío arriba).
     await ChatStatus.findOneAndUpdate(
       { userId },
-      { $set: { userId, username, lastMessageAt: new Date() }, $setOnInsert: { status: 'closed', category: 'cargas' } },
+      { $set: Object.assign({ userId, username }, _sentAny ? { lastMessageAt: new Date() } : {}),
+        $setOnInsert: Object.assign({ status: 'closed', category: 'cargas' }, _sentAny ? {} : { lastMessageAt: new Date() }) },
       { upsert: true }
     );
 
-    res.json({ success: true, alreadySent: false });
+    res.json({ success: true, alreadySent: false, sent: _sentAny });
   } catch (error) {
     console.error('Error enviando bienvenida:', error);
     res.status(500).json({ error: 'Error del servidor' });

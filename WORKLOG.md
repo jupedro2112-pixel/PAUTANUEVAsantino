@@ -6,6 +6,21 @@
 >
 > **Última actualización: 2026-09-24**
 
+## Sesión 2026-09-25
+
+### 302. Chats "Sin mensajes" en Cerrados (sin mensaje de registro)
+- Owner (panel de la cuenta vieja): chats de usuarios recién registrados aparecían en
+  Cerrados sin ningún mensaje. Causa: el alta por la APP creaba el `ChatStatus` con
+  `lastMessageAt=now` pero el mensaje de registro dependía de que el cliente llamara
+  `/api/messages/welcome` y de que `/sys_welcome` tuviera texto (vacío = no se manda);
+  además ese endpoint subía `lastMessageAt` aunque no creara nada (también en el
+  branch `skipped:'landing'`) → el chat subía a la lista vacío.
+- Fix: `/api/auth/register` deja SIEMPRE el mensaje de sistema "🎉 ¡Tu cuenta está
+  creada! Usuario/Clave" (`metadata.kind:'registered'`, igual que la landing).
+  `/api/messages/welcome` solo sube `lastMessageAt` si creó algún mensaje (devuelve
+  `sent`); si no, solo `$setOnInsert`. Backend, sin bump de SW.
+- Revisar en COMANDOS que `/sys_welcome` tenga texto si se quiere la bienvenida.
+
 ## Sesión 2026-09-24
 
 ### 301b. Avisos claros: "app instalada + notificaciones activas" (las 2 cosas)
