@@ -5,7 +5,9 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-06** — REFERIDOS 2.0 (#317, réplica #168-#175 del gemelo):
+> Última actualización: **2026-10-07** — reenvío de avisos hgcash configurable desde el panel
+> (#322, §5 AUTO-CARGA hgcash).
+> Antes: 2026-10-06 — REFERIDOS 2.0 (#317, réplica #168-#175 del gemelo):
 > niveles de % por referidos activos, tablero en vivo, actividad/ranking del admin (§2, §4.6,
 > §5, §8, §9). Antes ese mismo día: status de reembolsos devuelve `alreadyPaid`
 > (plata cobrada en diarios/semanales, #316, §5).
@@ -737,8 +739,12 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   índice único de HgcashCharge de nuestro lado y la idempotencia de 1girox del otro) →
   Transaction + mensaje + SLA. Fallo → se BORRA el HgcashCharge y es reintentable hasta
   3 veces (la reference estable impide que el reintento duplique la carga).
-  **Fan-out** (#94): reenvía el webhook crudo+firma a autoreembolsos.com
-  (`HGCASH_FANOUT_URL`, 'off' para apagar).
+  **Fan-out** (#94, panel #322): reenvía el webhook crudo+firma a las otras páginas que
+  comparten la cuenta hgcash. Destinos: `Config['hgcashFanout'].urls` (panel → Banco
+  automático → "🔁 Reenviar los avisos…", hasta 5, `GET/POST/DELETE /api/admin/hgcash/fanout`);
+  si ese Config no existe vale `HGCASH_FANOUT_URL` ('off' = apagado; default
+  autoreembolsos.com). Anti-círculo: un aviso que llega con `X-Forwarded-By` no se reenvía y
+  nunca se reenvía a la URL propia. Las otras páginas necesitan el MISMO secreto del webhook.
 - **Regla de APERTURA/CIERRE de chats (owner 2026-08-25/26, #243/#246):** el chat
   va a **Abiertos** SOLO cuando hace falta un agente; si todo fue automático, queda o
   vuelve a **Cerrado**. Concretamente:

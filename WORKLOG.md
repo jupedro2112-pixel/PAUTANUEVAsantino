@@ -4,7 +4,30 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-06**
+> **Última actualización: 2026-10-07**
+
+## Sesión 2026-10-07
+
+### 322. ESPEC-HGCASH-PANEL aplicada: reenvío de avisos hgcash a otras páginas desde el panel
+- Owner: aplicar `docs/ESPEC-HGCASH-PANEL.md` (está en el repo AUTOGIROXcompartido, su #330;
+  NO existe en este repo) tal cual, bloque por bloque.
+- Bloques #320 (servicio con token override, cifrado + carga c/60 s, firma del webhook con
+  panel o SSM, endpoints `/api/admin/hgcash/credentials`, card 🔐, JS del panel): ya estaban
+  idénticos desde nuestro #320 — verificado línea por línea, sin cambios.
+- Bloques #326 (lo nuevo): `_fanoutHgcashWebhook` reemplazado — destinos desde
+  `Config['hgcashFanout'].urls` (hasta 5, cache 30 s; sin ese Config vale `HGCASH_FANOUT_URL`
+  como antes), anti-círculo (no se re-reenvía un aviso con `X-Forwarded-By` ni a la URL
+  propia), stats por destino (por instancia). `GET/POST/DELETE /api/admin/hgcash/fanout`
+  (solo admin general, URLs validadas: https, dominio público, sin credenciales, path por
+  defecto `/api/hgcash/webhook`). Panel: recuadro "🔁 Reenviar los avisos de hgcash a otras
+  páginas" (textarea una por línea + estado del último reenvío) y `loadHgcashFanout()` en
+  `loadHgcashConfig`. admin-sw v70.
+- ⚠️ Sin config en el panel el comportamiento NO cambia: sigue `HGCASH_FANOUT_URL` (o el
+  default autoreembolsos.com si la env no está). Guardar una lista vacía = no reenviar.
+- **Probado:** `node --check` (server.js, admin.js, admin-sw.js), HTML balanceado, los 9
+  bloques de la espec presentes completos. **Back necesita redeploy.** PROBAR: panel → Banco
+  automático → recuadro 🔁 muestra el estado actual (AWS/panel); cargar la URL de la otra
+  página → transferencia real → "✅ último reenvío OK" y el movimiento aparece allá.
 
 ## Sesión 2026-10-06
 
