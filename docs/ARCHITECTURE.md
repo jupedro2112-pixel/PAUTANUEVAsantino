@@ -5,7 +5,9 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-07** — reenvío de avisos hgcash configurable desde el panel
+> Última actualización: **2026-10-13** — webhook hgcash: con secreto en el panel, el de SSM
+> deja de valer (#323).
+> Antes: 2026-10-07 — reenvío de avisos hgcash configurable desde el panel
 > (#322, §5 AUTO-CARGA hgcash).
 > Antes: 2026-10-06 — REFERIDOS 2.0 (#317, réplica #168-#175 del gemelo):
 > niveles de % por referidos activos, tablero en vivo, actividad/ranking del admin (§2, §4.6,
@@ -725,9 +727,11 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   memoria al arrancar y cada 60 s (`_loadHgcashCredentials` → `hgcashPay.setTokenOverride`).
   Prioridad panel > SSM (`HGCASH_API_TOKEN`/`HGCASH_WEBHOOK_SECRET` quedan de respaldo). El
   token se prueba con `GET /accounts` antes de guardar; al cambiarlo se limpia el
-  `accountId` cacheado. El webhook acepta la firma con el secreto del panel O el de SSM
-  (cambio de cuenta sin perder avisos). ⚠️ Si cambia JWT_SECRET lo del panel no se descifra
-  → cae a SSM y el panel lo avisa.
+  `accountId` cacheado. Webhook (#323): si hay secreto en el panel se acepta SOLO ese (el de
+  SSM deja de valer → los avisos de la cuenta hgcash vieja se rechazan); sin secreto en el
+  panel vale el de SSM. ⚠️ Si cambia JWT_SECRET lo del panel no se descifra → cae a SSM y el
+  panel lo avisa. ⚠️ Si las dos cuentas hgcash comparten el MISMO secreto/usuario, esto no
+  alcanza: no hay filtro por CBU de destino (pendiente).
 - **AUTO-CARGA hgcash** (`POST /api/hgcash/webhook`, firma HMAC sobre rawBody,
   fail-closed en prod): guarda BankMovement → matching contra Comprobantes por
   monto + (N° operación==coelsa/externalID, o nombre de origen + destino consistente)

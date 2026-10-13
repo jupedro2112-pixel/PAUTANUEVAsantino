@@ -4,7 +4,22 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-07**
+> **Última actualización: 2026-10-13**
+
+## Sesión 2026-10-13
+
+### 323. Webhook hgcash: con secreto en el panel, el de AWS (SSM) deja de valer
+- Owner: cambió token + secreto a la cuenta nueva (LOGISTICA FRANCISCANA) pero seguían
+  entrando movimientos de la vieja (CUATRO P MOVIL) y hasta se auto-cargaban si el cliente
+  mandaba ese comprobante. Causa: #320 aceptaba la firma con el secreto del panel O el de SSM
+  (para no perder avisos durante el cambio) → los avisos de la cuenta vieja, firmados con el
+  secreto viejo de SSM, pasaban.
+- `_hgcashWebhookSecrets()`: si hay secreto en el panel → SOLO ese; sin secreto en el panel →
+  el de SSM. Textos del recuadro 🔐 actualizados ("el de AWS ya NO se acepta").
+- ⚠️ No cubre el caso de dos cuentas bajo el MISMO usuario/secreto de hgcash: para eso falta
+  filtrar los movimientos por CBU de destino (= `Config.hgcash.cbu`), no hecho. Recomendado
+  además: borrar la URL del webhook en el dashboard de la cuenta vieja.
+- `node --check` (server.js, admin.js), HTML balanceado. admin-sw v71. **Back necesita redeploy.**
 
 ## Sesión 2026-10-07
 

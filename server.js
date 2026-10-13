@@ -3276,8 +3276,10 @@ function _fanoutSendOne(url, rawBody, headers) {
 // admin desde el panel, sin entrar a AWS SSM. Se guardan CIFRADAS (AES-256-GCM, clave
 // derivada de JWT_SECRET, que ya vive en SSM) en Config['hgcashCredentials']; un dump de la
 // base no las expone. Cada instancia las carga en memoria al arrancar y cada 60 s.
-// Prioridad: panel > SSM. El webhook acepta la firma con CUALQUIERA de los dos secretos
-// (panel o SSM) → durante el cambio de cuenta no se pierde ningún aviso.
+// Prioridad: panel > SSM. #323 (owner 2026-10-13): si hay secreto en el PANEL, el webhook
+// acepta SOLO ese — el de SSM deja de valer. Así, al cambiar de cuenta hgcash, los avisos de
+// la cuenta vieja (firmados con el secreto viejo de AWS) se RECHAZAN. SSM solo se usa si el
+// panel no tiene secreto. (Antes #320 aceptaba los dos durante el cambio.)
 // ⚠️ Si JWT_SECRET cambia, lo guardado no se puede descifrar → se usa SSM (y el panel avisa).
 let _hgcashPanelSecret = null;
 let _hgcashCredMeta = null; // { tokenLast4, secretLast4, updatedBy, updatedAt, decryptError }
@@ -3318,12 +3320,14 @@ async function _loadHgcashCredentials() {
 setTimeout(() => { _loadHgcashCredentials(); }, 8 * 1000);
 setInterval(() => { _loadHgcashCredentials(); }, 60 * 1000);
 function _hgcashWebhookSecrets() {
-  return [_hgcashPanelSecret, process.env.HGCASH_WEBHOOK_SECRET || null].filter(Boolean);
+  // #323: el del panel EXCLUYE al de SSM (no se suman).
+  if (_hgcashPanelSecret) return [_hgcashPanelSecret];
+  return [process.env.HGCASH_WEBHOOK_SECRET || null].filter(Boolean);
 }
 
 app.post('/api/hgcash/webhook', async (req, res) => {
   try {
-    const secrets = _hgcashWebhookSecrets(); // #320: panel y/o SSM
+    const secrets = _hgcashWebhookSecrets(); // #320/#323: el del panel, o (si no hay) el de SSM
     if (secrets.length) {
       const sigHeader = req.get('X-HG-Webhook-Signature') || '';
       const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body || {});
