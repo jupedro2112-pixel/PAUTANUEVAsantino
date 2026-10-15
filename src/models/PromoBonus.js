@@ -50,6 +50,9 @@ const promoBonusSchema = new mongoose.Schema({
   applyScope:   { type: String, enum: ['first', 'all'], default: 'first' },
   applyFromMin: { type: Number, default: null },
   applyToMin:   { type: Number, default: null },
+  // #CAP tope propio del % (copiado del lote al activar): null = tope global.
+  capARS:       { type: Number, default: null },
+  capExcessPct: { type: Number, default: null },
   usesCount:    { type: Number, default: 0 },
   // Rollover del bono automático (multiplier de 1girox, validado contra
   // bonus.multipliers al crear el lote). null = usar el global

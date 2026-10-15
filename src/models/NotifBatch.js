@@ -48,6 +48,10 @@ const notifBatchSchema = new mongoose.Schema({
   // el % automático. null = a cualquier hora dentro de la vigencia.
   applyFromMin: { type: Number, default: null },
   applyToMin: { type: Number, default: null },
+  // #CAP TOPE PROPIO del % de ESTE lote (sólo % automático): el % completo aplica hasta `capARS`
+  // y el excedente de la carga va al `capExcessPct`. null = tope global; capARS 0 = sin tope.
+  capARS: { type: Number, default: null },
+  capExcessPct: { type: Number, default: null },
 
   // Rollover del regalo de fichas auto-acreditado (owner 2026-08-10):
   // 0 = sin rollover (retirable), x2/x5/etc = debe apostar N× el bono.

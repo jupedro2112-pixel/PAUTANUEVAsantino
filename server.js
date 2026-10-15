@@ -593,6 +593,15 @@ async function getFirstChargeBonusConfig() {
 // carga $10.000 → $5.000 al 100% + $5.000 al 20% = $6.000; lote 50% → $2.500 + $1.000 =
 // $3.500; lote 20% → 20% de todo. (A diferencia de _bonusWithCap, que solo topea el 100%.)
 // capEnabled false o capArs 0 = sin tope.
+// #CAP: tope EFECTIVO para un bono/lote: el propio del lote (capARS / capExcessPct, copiados al
+// PromoBonus al activar) si lo tiene; si no, el global del bono de primera carga.
+function _loteCfgFor(src, globalCfg) {
+  const g = globalCfg || _fcbCfgCache || {};
+  const ownCap = src && src.capARS != null && Number.isFinite(Number(src.capARS));
+  const ownEx = src && src.capExcessPct != null && Number.isFinite(Number(src.capExcessPct));
+  if (!ownCap && !ownEx) return g;
+  return { capEnabled: true, capArs: ownCap ? Number(src.capARS) : (g.capEnabled !== false ? (Number(g.capArs) || 0) : 0), restPct: ownEx ? Number(src.capExcessPct) : (Number(g.restPct) || 0), own: true };
+}
 function _loteBonusAmount(amount, pct, cfg) {
   const a = Math.max(0, Number(amount) || 0), p = Math.max(0, Number(pct) || 0);
   const c = cfg || _fcbCfgCache;
@@ -869,7 +878,7 @@ async function claimAutoPromoPercent(user, usedBy) {
     const label = `${pb.percent}% ${pb.sourceRuleName || 'lote'}` +
       (scope === 'all' ? ' (todas las cargas' + (pb.applyFromMin != null ? ` ${_fmtMinOfDay(pb.applyFromMin)}-${_fmtMinOfDay(pb.applyToMin)}` : '') + ')' : '');
     const rolloverX = (pb.rolloverX == null || !Number.isFinite(Number(pb.rolloverX))) ? null : Number(pb.rolloverX);
-    return { pct: Number(pb.percent), claimed: true, id: pb.id, scope, label, usedBy: usedBy || 'auto', rolloverX };
+    return { pct: Number(pb.percent), claimed: true, id: pb.id, scope, label, usedBy: usedBy || 'auto', rolloverX, capARS: pb.capARS == null ? null : Number(pb.capARS), capExcessPct: pb.capExcessPct == null ? null : Number(pb.capExcessPct) };
   } catch (e) {
     logger.warn(`[promo-auto] claim % falló: ${e.message}`);
     return { pct: 0, claimed: false };
@@ -2899,7 +2908,7 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
     const _fcbHg = (_dupBank || _rouHg.claimed) ? { bonus: 0, claimed: false } : await claimFirstChargeBonus(user, Number(amount));
     // #263 BONO DE LOTE AUTOMÁTICO: si no hubo ruleta ni 1ª carga (ni multicuenta).
     const _loteHg = (_dupBank || _rouHg.claimed || _fcbHg.claimed) ? { pct: 0, claimed: false } : await claimAutoPromoPercent(user, 'auto-hgcash');
-    const _loteHgBonus = _loteHg.claimed ? _loteBonusAmount(amount, _loteHg.pct, await getFirstChargeBonusConfig()) : 0; // #311 tope del lote
+    const _loteHgBonus = _loteHg.claimed ? _loteBonusAmount(amount, _loteHg.pct, _loteCfgFor(_loteHg, await getFirstChargeBonusConfig())) : 0; // #311 tope del lote
     const _hgBonus = _rouHgBonus > 0 ? _rouHgBonus : (_fcbHg.bonus || _loteHgBonus || 0);
     const result = await girox.depositToUser(
       user.username, Number(amount), 'Carga automática (hgcash)', _ref,
@@ -3030,7 +3039,7 @@ async function hgcashAutoCarga({ movement, comprobante, mode }) {
     }
     if (_loteHg.claimed && _hgBonusApplied) {
       await _emitAdminOnlyChatNote(user.id, user.username,
-        `🎁 LOTE: se aplicó AUTOMÁTICO el ${_loteHg.pct}%${_loteCapTxt(_loteHg.pct)} (${_loteHg.label}) = $${Number(_loteHgBonus).toLocaleString('es-AR')} en la carga automática de $${Number(amount).toLocaleString('es-AR')}${_loteHg.rolloverX != null ? ' · rollover x' + _loteHg.rolloverX : ''}. ${_loteHg.scope === 'all' ? 'El bono sigue vigente para sus próximas cargas.' : 'Bono consumido (valía una carga).'} No hay que marcar nada.`);
+        `🎁 LOTE: se aplicó AUTOMÁTICO el ${_loteHg.pct}%${_loteCapTxt(_loteHg.pct, _loteCfgFor(_loteHg))} (${_loteHg.label}) = $${Number(_loteHgBonus).toLocaleString('es-AR')} en la carga automática de $${Number(amount).toLocaleString('es-AR')}${_loteHg.rolloverX != null ? ' · rollover x' + _loteHg.rolloverX : ''}. ${_loteHg.scope === 'all' ? 'El bono sigue vigente para sus próximas cargas.' : 'Bono consumido (valía una carga).'} No hay que marcar nada.`);
     }
     await _emitAdminOnlyChatNote(user.id, user.username, `🏦 ✅ CARGA AUTOMÁTICA hgcash — ${dataDesc}. Acreditado.`);
     // Todo automático y OK → no hace falta agente: el chat se cierra por Sistema
@@ -9599,7 +9608,7 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
     }
     const _autoBonus = _roulPct > 0 ? await computeAutoBonus(amount, _roulPct) // #285 tope del 100%
       : _fcbBonus > 0 ? _fcbBonus
-      : _lotePct > 0 ? _loteBonusAmount(amount, _lotePct, await getFirstChargeBonusConfig()) : 0; // #311 tope del lote
+      : _lotePct > 0 ? _loteBonusAmount(amount, _lotePct, _loteCfgFor(_loteClaim, await getFirstChargeBonusConfig())) : 0; // #311 tope del lote
     const _effectiveBonus = _autoBonus > 0 ? _autoBonus : parseFloat(bonus);
 
     const bonusRequested = _effectiveBonus > 0;
@@ -9677,7 +9686,7 @@ app.post('/api/admin/deposit', authMiddleware, depositorMiddleware, async (req, 
         if (_loteClaim && bonusActuallyApplied) {
           await settleAutoPromoPercent(_loteClaim, parseFloat(amount), _autoBonus);
           await _emitAdminOnlyChatNote(user.id, user.username,
-            `🎁 LOTE: se aplicó AUTOMÁTICO el ${_lotePct}%${_loteCapTxt(_lotePct)} (${_loteClaim.label}) = $${Number(_autoBonus).toLocaleString('es-AR')} sobre esta carga de $${Number(amount).toLocaleString('es-AR')}${_loteClaim.rolloverX != null ? ' · rollover x' + _loteClaim.rolloverX : ''}. ${_loteClaim.scope === 'all' ? 'El bono sigue vigente para sus próximas cargas.' : 'Bono consumido (valía una carga).'} No hay que marcar nada.`);
+            `🎁 LOTE: se aplicó AUTOMÁTICO el ${_lotePct}%${_loteCapTxt(_lotePct, _loteCfgFor(_loteClaim))} (${_loteClaim.label}) = $${Number(_autoBonus).toLocaleString('es-AR')} sobre esta carga de $${Number(amount).toLocaleString('es-AR')}${_loteClaim.rolloverX != null ? ' · rollover x' + _loteClaim.rolloverX : ''}. ${_loteClaim.scope === 'all' ? 'El bono sigue vigente para sus próximas cargas.' : 'Bono consumido (valía una carga).'} No hay que marcar nada.`);
         }
         if (_roulClaimed && bonusActuallyApplied) {
           await _emitAdminOnlyChatNote(user.id, user.username,
@@ -21777,7 +21786,7 @@ app.get('/api/admin/promo-bonus', authMiddleware, adminMiddleware, async (req, r
         applyToMin: b.applyToMin == null ? null : b.applyToMin,
         usesCount: b.usesCount || 0,
         rolloverX: b.rolloverX == null ? null : b.rolloverX,
-        capTxt: Number(b.percent) > 0 ? _loteCapTxt(b.percent, await getFirstChargeBonusConfig()) : '' // #311
+        capTxt: Number(b.percent) > 0 ? _loteCapTxt(b.percent, _loteCfgFor(b, await getFirstChargeBonusConfig())) : '' // #311
       }
     });
   } catch (err) {
@@ -22288,7 +22297,10 @@ async function _activateBatchPromoBonus(user, batch) {
     applyToMin: batch.applyToMin == null ? null : batch.applyToMin,
     // rollover propio del % automático (owner 2026-09-04: "que se use rollover
     // en bonus y evitamos cosas raras"); null = global
-    rolloverX: (batch.giftType === 'percent' && batch.applyMode === 'auto' && Number.isFinite(Number(batch.rolloverX))) ? Number(batch.rolloverX) : null
+    rolloverX: (batch.giftType === 'percent' && batch.applyMode === 'auto' && Number.isFinite(Number(batch.rolloverX))) ? Number(batch.rolloverX) : null,
+    // #CAP tope propio del lote (null = global)
+    capARS: batch.capARS == null ? null : Number(batch.capARS),
+    capExcessPct: batch.capExcessPct == null ? null : Number(batch.capExcessPct)
   });
 }
 
@@ -22310,7 +22322,7 @@ function _giftLabelOf(batch) {
   if (batch.giftType !== 'percent') {
     return `regalo de $${Number(batch.amount).toLocaleString('es-AR')} en tu próxima carga`;
   }
-  const capTxt = batch.applyMode === 'auto' ? _loteCapTxt(batch.amount) : ''; // #311
+  const capTxt = batch.applyMode === 'auto' ? _loteCapTxt(batch.amount, _loteCfgFor(batch)) : ''; // #311
   if (batch.applyMode === 'auto' && batch.applyScope === 'all') {
     return `+${batch.amount}% EXTRA en TODAS tus cargas${_batchWindowTxt(batch)}${capTxt}`;
   }
@@ -22594,6 +22606,23 @@ app.post('/api/admin/notif-batches', authMiddleware, adminMiddleware, async (req
       }
     }
 
+    // #CAP TOPE PROPIO del % de este lote (sólo % automático). Vacío = usa el tope global.
+    // capARS 0 = sin tope. capExcessPct 0 = el excedente no recibe bono.
+    let capARS = null, capExcessPct = null;
+    if (giftType === 'percent' && applyMode === 'auto') {
+      if (b.capARS != null && b.capARS !== '') {
+        const c = Math.round(Number(b.capARS));
+        if (!Number.isFinite(c) || c < 0 || c > 100000000) return res.status(400).json({ error: 'El tope del bono tiene que ser un monto entre 0 (sin tope) y 100.000.000.' });
+        capARS = c;
+      }
+      if (b.capExcessPct != null && b.capExcessPct !== '') {
+        const e = Math.round(Number(b.capExcessPct));
+        if (!Number.isFinite(e) || e < 0 || e > 200) return res.status(400).json({ error: 'El % sobre el excedente tiene que estar entre 0 y 200.' });
+        capExcessPct = e;
+      }
+      if (capExcessPct != null && capARS == null) capARS = (await getFirstChargeBonusConfig()).capArs; // % excedente sin tope propio → fija el global de hoy
+    }
+
     // Rollover del regalo de fichas (giftType fixed, cualquier modo — las
     // fichas SIEMPRE se acreditan solas: por código al canjear, por tiempo al
     // enviar). Se valida contra bonus.multipliers de 1girox (⚠️ NO los de
@@ -22667,7 +22696,7 @@ app.post('/api/admin/notif-batches', authMiddleware, adminMiddleware, async (req
       const batchP = {
         id: uuidv4(),
         name, mode: 'code', giftType, amount, rolloverX, code, validHours, useHours,
-        applyMode, applyScope, applyFromMin, applyToMin,
+        applyMode, applyScope, applyFromMin, applyToMin, capARS, capExcessPct,
         sentAt: sentAtP, expiresAt: new Date(sentAtP.getTime() + validHours * 3600 * 1000),
         title: '', message,
         sentBy: req.user.username, sentByRole: req.user.role,
@@ -22703,7 +22732,7 @@ app.post('/api/admin/notif-batches', authMiddleware, adminMiddleware, async (req
     const batch = {
       id: uuidv4(),
       name, mode, giftType, amount, rolloverX, code, validHours, useHours, sentAt, expiresAt,
-      applyMode, applyScope, applyFromMin, applyToMin,
+      applyMode, applyScope, applyFromMin, applyToMin, capARS, capExcessPct,
       title, message,
       sentBy: req.user.username, sentByRole: req.user.role,
       ...audience,
@@ -22763,7 +22792,7 @@ app.get('/api/admin/notif-batches', authMiddleware, adminMiddleware, async (req,
         sentBy: 1, sentByRole: 1,
         audienceType: 1, audienceDays: 1, audienceLimit: 1, audienceLabel: 1, sendDone: 1,
         isPublic: 1, maxClaims: 1,
-        applyMode: 1, applyScope: 1, applyFromMin: 1, applyToMin: 1, rolloverX: 1, useHours: 1,
+        applyMode: 1, applyScope: 1, applyFromMin: 1, applyToMin: 1, rolloverX: 1, useHours: 1, capARS: 1, capExcessPct: 1,
         total: { $size: { $ifNull: ['$recipients', []] } },
         claimed: { $size: { $filter: { input: { $ifNull: ['$recipients', []] }, as: 'r', cond: { $ne: ['$$r.claimedAt', null] } } } },
         delivered: { $size: { $filter: { input: { $ifNull: ['$recipients', []] }, as: 'r', cond: { $in: ['$$r.delivery', ['socket', 'push']] } } } },
