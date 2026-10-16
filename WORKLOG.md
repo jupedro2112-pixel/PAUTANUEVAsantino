@@ -4,7 +4,14 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-15**
+> **Última actualización: 2026-10-16**
+
+## Sesión 2026-10-16
+
+### 325. Cambio de título en landing: "1GIROX - Divertite"
+- **Owner:** cambiar el título de la página de landing de "1GIROX — Entrá a jugar" a "1GIROX - Divertite".
+- **Archivo:** `/landing/index.html`, línea 6.
+- **Cambio:** actualización de contenido, sin impacto en lógica.
 
 ## Sesión 2026-10-15
 
