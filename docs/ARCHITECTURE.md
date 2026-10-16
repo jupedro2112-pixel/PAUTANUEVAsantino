@@ -1144,3 +1144,19 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   AR con VPN o proxy bloqueados), considerar whitelist de IPs o dejar que la Opción 2 (script
   del cliente) sea el filtro final. La librería `geoip-lite` se actualiza raramente; para máxima
   precisión usar una API o MaxMind comercial.
+
+## Cronograma de campañas programadas (#327, réplica del #190 de AUTOREEMBOLSOSjygactivo)
+
+- **Modelo `ScheduledCampaign`**: `payload` = body exacto del POST de lotes, `parts[]` (tandas con
+  `runAt`/`status`/`usernames`/`batchId`), `paused/cancelled`. Estado de la campaña derivado al leer.
+- **`_createNotifBatchFromBody(body, user)`**: el cuerpo del `POST /api/admin/notif-batches` (stub de
+  `res` → `{http, body}`). El endpoint y el programador llaman a la misma función: toda validación o
+  efecto nuevo del lote va AHÍ.
+- **Motor `_schedTick`** (setInterval 60 s en cada instancia): claim posicional
+  `parts.$.status scheduled→sending`, crea el lote, marca sent/error; tanda colgada >15 min → error.
+  Tandas: audiencia resuelta una vez y repartida sin repetir; cada tanda = lote `list`.
+- **Rutas** `/api/admin/cronograma*` (+ `/api/admin/cronograma-report?month=`). `/api/admin/campaigns`
+  es de publicistas: no reusar.
+- **Rangos de audiencia**: `audienceDaysMax` / `dateFrom`+`dateTo` en `_resolveNotifBatchSegment` (3 bases).
+- **Panel**: sección 📅 Cronograma (calendario, lista con acciones, edición, comparativo semanal) +
+  bloque "📅 Cuándo sale" en el formulario del lote.
