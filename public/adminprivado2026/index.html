@@ -1654,12 +1654,9 @@ document.addEventListener('change', function (ev) {
                     </div>
                 </div>
 
-                <!-- #264 (owner 2026-09-04): el compositor y la difusión por etiqueta
-                     quedan OCULTOS — todo se manda desde "🎁 Lote con regalo" (que ahora
-                     también permite "solo aviso"). Se conservan (no se borraron) por si
-                     hace falta volver: botón "mostrar herramientas viejas". -->
-                <div id="notifLegacyTools" style="display:none">
-                <!-- Compositor de notificación -->
+                <!-- Compositor de notificación (#328, owner 2026-10-16: vuelve a estar VISIBLE —
+                     título + mensaje sin regalo, a todos con app o por lotes de N desde el usuario N°.
+                     Estuvo oculto desde el #264.) -->
                 <div class="commands-section" style="background:var(--bg-secondary,#1a1a2e);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem">
                     <h3 style="margin-bottom:1rem;font-size:1rem;color:var(--text-secondary,#aaa)">✉️ Redactar notificación</h3>
                     <div class="form-group">
@@ -1712,7 +1709,7 @@ document.addEventListener('change', function (ev) {
                             </select>
                         </div>
                         <!-- Offset (seguimiento) -->
-                        <div id="notifOffsetDiv" style="display:none">
+                        <div id="notifOffsetDiv">
                             <label class="form-label" style="display:block;margin-bottom:.3rem">Desde usuario N°</label>
                             <input type="number" id="notifBatchOffset" class="form-input" value="0" min="0" style="min-width:90px">
                         </div>
@@ -1745,6 +1742,9 @@ document.addEventListener('change', function (ev) {
                     </div>
                 </div>
 
+                <!-- #264 (owner 2026-09-04): la difusión por etiqueta queda OCULTA — se conserva
+                     (no se borró) por si hace falta volver: botón "herramientas viejas". -->
+                <div id="notifLegacyTools" style="display:none">
                 <!-- Difusión por etiqueta -->
                 <div class="commands-section" style="background:var(--bg-secondary,#1a1a2e);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem">
                     <h3 style="margin-bottom:1rem;font-size:1rem;color:#d4af37">📣 Difusión por etiqueta</h3>
@@ -1782,7 +1782,7 @@ document.addEventListener('change', function (ev) {
                         <h3 style="margin:0;font-size:1rem;color:#d4af37">🎁 Lote con regalo (o solo aviso)</h3>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                             <button class="btn btn-secondary btn-sm" onclick="var e=document.getElementById('giftBatchAyuda');e.style.display=(e.style.display==='none'?'':'none')">❓ Cómo funciona</button>
-                            <button class="btn btn-secondary btn-sm" style="opacity:.6" title="Compositor viejo y difusión por etiqueta (ya no hacen falta: todo sale desde acá)" onclick="var e=document.getElementById('notifLegacyTools');e.style.display=(e.style.display==='none'?'':'none')">🧰 herramientas viejas</button>
+                            <button class="btn btn-secondary btn-sm" style="opacity:.6" title="Difusión por etiqueta (vieja; el compositor volvió a estar visible arriba)" onclick="var e=document.getElementById('notifLegacyTools');e.style.display=(e.style.display==='none'?'':'none')">🧰 herramientas viejas</button>
                         </div>
                     </div>
                     <!-- Guía completa para agentes (owner 2026-08-10). Toggle con ❓. -->

@@ -8,6 +8,22 @@
 
 ## Sesión 2026-10-16
 
+### 328. Vuelve "✉️ Redactar notificación" (aviso sin regalo: todos con app / por lote desde usuario N°)
+- **Owner (captura):** quiere el redactor simple: título + mensaje, modo "📱 Todos con app (de una
+  sola vez)" o "📦 Por lote (segmentado)" con segmento, tamaño de lote, "Desde usuario N°", botones
+  "🚀 Enviar lote" y "🔄 Reiniciar lote".
+- **Ya existía:** es el compositor que el #264 ocultó dentro de `#notifLegacyTools` (todo intacto:
+  `sendBatchNotification` / `sendNextBatch` / `resetNotifBatch` / `sendAllWithApp` en admin.js y
+  `POST /api/notifications/send-batch` en `src/routes/notificationRoutes.js`, con segmentos all /
+  active / inactive_7d / inactive / with_balance / specific, `batchSize` 50-100-200 y
+  `batchOffset`; la respuesta trae `totalSegmentUsers / nextOffset / remaining`).
+- **Cambio (sólo panel, admin-sw v73 → v74):** el compositor sale del wrapper oculto y queda
+  visible arriba del "🎁 Lote con regalo"; "Desde usuario N°" se ve siempre en modo lote (antes
+  `display:none`). La "📣 Difusión por etiqueta" sigue oculta detrás de "🧰 herramientas viejas".
+- **Validado:** HTML balanceado. **PROBAR:** modo lote con segmento "Todos con app", tamaño 100,
+  desde 0 → enviar, ver "Enviados / Faltan" y el botón "➡️ Siguiente lote"; "Reiniciar lote" vuelve
+  el offset a 0.
+
 ### 327. 📅 CRONOGRAMA: campañas programadas (fecha/hora AR), calendario mensual, tandas, rangos de días/fechas y comparativo semanal (réplica #190 de AUTOREEMBOLSOSjygactivo)
 - **Owner:** "entrar a principio de mes, preparar todas las campañas (bonos, regalos, avisos, activos,
   inactivos, fechas fuertes), revisar todo y dejar el mes completo programado". Igual en los 7 repos.
