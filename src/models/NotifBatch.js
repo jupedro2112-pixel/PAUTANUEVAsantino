@@ -78,6 +78,11 @@ const notifBatchSchema = new mongoose.Schema({
   // tiene el cliente para USAR el bono DESPUÉS de canjearlo (default 24). Vencido ese
   // plazo el PromoBonus queda 'expired' aunque el lote siga vigente para canjear.
   useHours: { type: Number, default: 24, min: 1 },
+  // #330 (owner 2026-10-17): FICHAS POR TIEMPO con RECLAMO. true = al enviar NO se acredita a
+  // nadie: cada cliente tiene un botón "🎁 RECLAMAR" en la app (home, hub PREMIOS y modal de
+  // código) y las fichas se acreditan recién cuando lo toca, mientras el lote esté vigente
+  // (expiresAt). Así sólo se paga a los que de verdad vuelven a jugar. Lotes viejos = false.
+  claimRequired: { type: Boolean, default: false },
   sentAt: { type: Date, default: Date.now, index: true },
   expiresAt: { type: Date, required: true, index: true },
 

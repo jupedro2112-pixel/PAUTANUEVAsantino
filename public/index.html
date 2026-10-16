@@ -1033,6 +1033,11 @@
                 </div>
             </div>
 
+            <!-- #330 Regalos de FICHAS para RECLAMAR (lote de notificación con reclamo):
+                 card dorada con botón RECLAMAR. Render dinámico desde js/promobonus.js
+                 (sólo regalos; sin el cartel de % ni polling — ver WORKLOG #235). -->
+            <div id="giftClaimCard" style="display:none; margin:8px 8px 0;"></div>
+
             <!-- (owner 2026-08-25) #promoBonusCard + js/promobonus.js removidos —
                  feature eliminada (invisible bajo el casino + polleaba cada 2min
                  y el sistema que la alimentaba está apagado). Ver WORKLOG #235. -->
@@ -2226,9 +2231,10 @@
     <script src="/js/fire.js"></script>
     <script src="/js/reviews.js"></script>
     <script src="/js/notifications.js"></script>
-    <script src="/js/ui.js?v=319"></script>
+    <script src="/js/ui.js?v=320"></script>
     <script src="/js/withdraw.js"></script>
     <script src="/js/installbonus.js"></script>
+    <script src="/js/promobonus.js?v=330"></script>
     <script src="/js/notifsurvey.js"></script>
     <script src="/js/publisherwelcome.js"></script>
     <script src="/js/apptest.js"></script>
@@ -4081,6 +4087,8 @@
                 <h2>🎁 Reclamar Bono con Código</h2>
                 <p>El código de bienvenida de la Comunidad o un código que te enviamos por notificación</p>
             </div>
+            <!-- #330 regalos de fichas pendientes de reclamar (botón, sin código) -->
+            <div id="giftPendingBox"></div>
             <div id="welcomeCodeBody">
                 <p style="color:#aaa;font-size:13px;">Cargando...</p>
             </div>
@@ -4165,6 +4173,8 @@
 
         window.openWelcomeCodeModal = async function () {
             showModal('welcomeCodeModal');
+            // #330 regalos para RECLAMAR (fichas de lote) arriba del canje por código
+            try { if (VIP.promoBonus) { VIP.promoBonus.renderPending('giftPendingBox'); VIP.promoBonus.loadGifts(); } } catch (_) {}
             _body().innerHTML = '<p style="color:#aaa;font-size:13px;">Cargando...</p>';
             try {
                 const r = await fetch(VIP.config.API_URL + '/api/community-code/status', {

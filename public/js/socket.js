@@ -84,6 +84,8 @@ VIP.socket = (function () {
         });
 
         VIP.state.socket.on('new_message', function (data, ack) {
+            // #330: un mensaje del sistema puede traer un regalo de fichas para RECLAMAR → refrescar la card.
+            try { const _m = (data && data.message) || data; if (_m && _m.type === 'system' && VIP.promoBonus) setTimeout(VIP.promoBonus.loadGifts, 800); } catch (_) {}
             // Acuse de recibo inmediato: el server emite con ack-timeout 3s.
             // Si no llamamos ack, el server asume socket fantasma y manda push
             // FCM de respaldo. Llamarlo lo más temprano posible reduce falsos

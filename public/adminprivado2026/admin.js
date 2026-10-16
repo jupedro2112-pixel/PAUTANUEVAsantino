@@ -12559,7 +12559,7 @@ async function sendGiftBatch() {
         ? (applyMode === 'agent'
             ? ('+' + amount + '% en próxima carga (lo aplica el agente, cartel verde)')
             : ('+' + amount + '% AUTOMÁTICO en ' + (applyScope === 'all' ? 'TODAS sus cargas' : 'su PRIMERA carga') + franjaTxt + capTxtLote + ' — se suma solo, nadie marca nada · bono con ' + (rolloverX > 0 ? 'rollover x' + rolloverX : 'SIN rollover (retirable)')))
-        : ('$' + amount.toLocaleString('es-AR') + ' en fichas — SE ACREDITAN SOLAS (rollover x' + rolloverX + ')');
+        : ('$' + amount.toLocaleString('es-AR') + ' en fichas — ' + (mode === 'window' ? 'SE ACREDITAN AL RECLAMAR (botón 🎁 en la app; a quien no reclama no se le paga)' : 'SE ACREDITAN SOLAS al canjear el código') + ' (rollover x' + rolloverX + ')');
     const modoTxt = mode === 'code' ? 'CON CÓDIGO (solo los del lote pueden canjearlo)' : ('POR TIEMPO (' + validHours + 'hs)');
     const audTxt = esPublico ? ('📣 CÓDIGO PÚBLICO — cualquier cliente registrado' + (audience.maxClaims ? ' (cupo ' + audience.maxClaims + ' canjes)' : ' (SIN cupo)')) :
         audience.audienceType === 'all' ? '🌍 LOTE COMPLETO' :
@@ -12723,7 +12723,13 @@ async function toggleNotifBatchDetail(id) {
                 '<span style="color:#ff9d76;">⏰ vencidos sin usar <b>' + (sm.vencidos || 0) + '</b></span>' +
                 (sm.cancelados ? '<span style="color:#888;">✕ cancelados/reemplazados <b>' + sm.cancelados + '</b></span>' : '') +
               '</div>'
-            : '';
+            : ((j.batch && j.batch.giftType === 'fixed' && j.batch.claimRequired)
+                ? '<div style="display:flex;gap:.6rem;flex-wrap:wrap;font-size:.78rem;margin-bottom:.4rem;">' +
+                    '<span style="color:#00ff88;">💰 reclamaron y cobraron <b>' + (sm.acreditados || 0) + '</b>' + (sm.fichasTotal > 0 ? ' ($' + Number(sm.fichasTotal).toLocaleString('es-AR') + ' pagados)' : '') + '</span>' +
+                    '<span style="color:#ffd700;">🎁 sin reclamar <b>' + (sm.sinReclamar || 0) + '</b></span>' +
+                    '<span style="color:#ff9d76;">⏰ no reclamaron y venció <b>' + (sm.vencidosSinReclamar || 0) + '</b></span>' +
+                  '</div>'
+                : '');
         box.innerHTML = resumen + '<div style="max-height:260px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:6px;padding:.5rem;">' +
             shown.map((u) => {
                 let estado;
@@ -12737,6 +12743,8 @@ async function toggleNotifBatchDetail(id) {
                 else if (u.outcome === 'active') estado = canje + '<span style="color:#00ff88;">🎁 bono ACTIVO · vence ' + fx(u.bonusExpiresAt) + '</span>';
                 else if (u.outcome === 'expired') estado = canje + '<span style="color:#ff9d76;">⏰ venció sin usar (' + fx(u.bonusExpiresAt) + ')</span>';
                 else if (u.outcome === 'cancelled') estado = canje + '<span style="color:#888;">✕ cancelado o reemplazado por otro bono</span>';
+                else if (u.giftOutcome === 'pending_claim') estado = '<span style="color:#ffd700;">🎁 sin reclamar todavía</span>';
+                else if (u.giftOutcome === 'expired_unclaimed') estado = '<span style="color:#ff9d76;">⏰ no reclamó y venció</span>';
                 else if (u.claimedAt) estado = '<span style="color:#00ff88;">canjeado ' + fx(u.claimedAt) + '</span>';
                 else estado = '<span style="color:#aaa;">sin canjear</span>';
                 const entrega = u.delivery === 'socket' ? '🟢 en la app' :

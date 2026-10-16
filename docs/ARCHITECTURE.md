@@ -1164,3 +1164,8 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   `notificationRoutes.sendBatchPush` (wrapper de `POST /api/notifications/send-batch`) en chunks;
   `manual:true` = envío a mano registrado por `setPushLogHook`. El `GET` del cronograma suma lotes
   enviados a mano y ocurrencias de ScheduledNotif como ítems de sólo lectura.
+- **#330 Fichas de lote con RECLAMO:** `NotifBatch.claimRequired` (true en todo lote fichas +
+  por tiempo). El motor no acredita; el cliente reclama con `POST /api/gift/claim` (lista en
+  `GET /api/gift/pending`). PWA: `public/js/promobonus.js` pinta la card en `#giftClaimCard`
+  (home), `#rwGiftsBox` (hub PREMIOS) y `#giftPendingBox` (modal de código). Un lote de fichas
+  nuevo que quiera acreditar directo tiene que pasar por `_notifBatchFichasAfterClaim` igual.

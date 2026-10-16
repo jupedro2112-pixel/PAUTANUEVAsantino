@@ -3747,9 +3747,11 @@ VIP.ui.openRewardsHub = function(focus) {
         '<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:0.5px;margin-top:4px;">TUS PREMIOS</div>' +
         '<div style="font-size:12px;color:#9aa4b0;margin-top:2px;">Ruletas, bonos y cashback — todo acá</div>' +
       '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:14px;">' + cards + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:14px;"><div id="rwGiftsBox"></div>' + cards + '</div>' +
     '</div>';
   document.body.appendChild(ov);
+  // #330 regalos de fichas para RECLAMAR (lotes de notificación) arriba de todo en PREMIOS.
+  try { if (VIP.promoBonus) { VIP.promoBonus.renderPending('rwGiftsBox'); VIP.promoBonus.loadGifts(); } } catch (e) {}
   // #308: abierto desde el banner "Invitá y ganá" → scroll a la tarjeta de referidos.
   if (focus === 'ref') { try { const c = document.getElementById('rwRefCard'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }
   // Arrancar el polling solo si no está corriendo (el re-render del propio

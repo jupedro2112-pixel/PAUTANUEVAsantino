@@ -4,9 +4,40 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-16**
+> **Última actualización: 2026-10-17**
 
 ## Sesión 2026-10-16
+
+### 330. Botón "🎁 RECLAMAR" del lado del usuario para las fichas de un lote de notificación (réplica del #177/#191 de CARGASGIROX)
+- **Owner (2026-10-17):** "no cuenta con botón del lado del usuario para reclamar un bono activo
+  activado desde lote de notificación; quiero que aparezca en PREMIOS, donde está la opción de
+  agregar bono, y que funcione como en CARGASGIROX".
+- **Antes:** un lote "fichas por tiempo" acreditaba a TODOS al enviarse (plata a gente que no
+  vuelve). Ahora **siempre es con reclamo** (`NotifBatch.claimRequired`, como el #183 del gemelo):
+  al enviar no se acredita nada; el cliente ve una card dorada "Tenés $X en fichas de regalo —
+  RECLAMAR" y las fichas entran al instante cuando la toca, mientras el lote esté vigente.
+- **Backend:** `claimRequired = mode==='window' && giftType==='fixed'` en `_createNotifBatchFromBody`
+  (recipients nacen con `claimedAt:null`); el motor `_processOneNotifBatch` NO acredita en esos
+  lotes y manda el aviso `/sys_lote_aviso_reclamo` (editable desde COMANDOS; fallback con "tocá
+  RECLAMAR en el cartel del inicio o en 🎁 PREMIOS"), push con `giftClaim`. Nuevos
+  `GET /api/gift/pending` (regalos vigentes sin reclamar de este cliente) y `POST /api/gift/claim
+  {batchId}` (reserva atómica `claimedAt` → `_notifBatchFichasAfterClaim` → `_creditNotifBatchGift`
+  con los mismos guards anti-abuso del canje por código; si 1girox falla se libera la reserva;
+  mensaje `/sys_lote_reclamo_cash` + nota interna al agente). `GET /api/admin/notif-batches/:id`
+  suma `acreditados / sinReclamar / vencidosSinReclamar / fichasTotal` y `giftOutcome` por usuario.
+- **PWA (ui.js ?v=320, SW v195):** nuevo `public/js/promobonus.js` (SOLO regalos: sin el cartel
+  de % ni polling cada 2 min que motivó el #235; refresca al entrar, al volver a la app, al
+  llegar un mensaje del sistema y al abrir PREMIOS / el modal). Card en la home
+  (`#giftClaimCard`, debajo del banner del bono app), arriba de todo en el hub **🎁 PREMIOS**
+  (`#rwGiftsBox`) y en el modal "Reclamar Bono con Código" (`#giftPendingBox`). Al reclamar:
+  toast + saldo + chat.
+- **Panel (admin-sw v76):** confirm del lote de fichas por tiempo dice "SE ACREDITAN AL RECLAMAR";
+  "Ver lote" muestra 💰 reclamaron y cobraron / 🎁 sin reclamar / ⏰ no reclamaron y venció, y el
+  estado por usuario.
+- **Validado:** `node --check` OK (server, modelo, admin.js, ui.js, socket.js, promobonus.js, SWs),
+  HTML balanceado, rutas después de `authMiddleware`. **PROBAR:** mandar un lote de fichas por
+  tiempo a un usuario de prueba → en la app aparece la card con RECLAMAR (home, PREMIOS y modal),
+  tocar → fichas acreditadas y "Ver lote" lo muestra como reclamado; sin tocar → "sin reclamar".
 
 ### 329. Programar desde "✉️ Redactar notificación" + calendario con TODAS las notificaciones (réplica #191 de AUTOREEMBOLSOSjygactivo)
 - **Owner:** que el compositor (aviso simple sin regalo) también se pueda programar por fecha, que
