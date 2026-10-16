@@ -26,6 +26,7 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const winston = require('winston');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
+const geoip = require('geoip-lite');
 
 // ============================================
 // LOGGER (Winston)
@@ -1575,6 +1576,46 @@ app.get('/:code', async (req, res, next) => {
     return next();
   }
 });
+
+// ============================================
+// MIDDLEWARE: Geolocalización para landing (solo Argentina)
+// Filtra la landing para que solo sea accesible desde Argentina
+// ============================================
+app.use('/landing/', (req, res, next) => {
+  // Obtener IP del cliente (considerar proxies)
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+                   req.headers['x-real-ip'] ||
+                   req.connection.remoteAddress ||
+                   req.socket.remoteAddress;
+
+  // Obtener geolocalización por IP
+  const geo = geoip.lookup(clientIp);
+  const country = geo?.country || 'UNKNOWN';
+
+  // Solo permitir Argentina (AR)
+  if (country !== 'AR') {
+    logger.warn(`[landing-geo] IP ${clientIp} (${country}) bloqueada (no Argentina)`);
+    return res.status(200).send('<!DOCTYPE html><html><head><title></title></head><body></body></html>');
+  }
+
+  // Argentina: permitir acceso
+  next();
+});
+
+// Servir carpeta /landing (solo para IPs validadas como Argentina)
+app.use('/landing/', express.static(path.join(__dirname, 'landing'), {
+  dotfiles: 'deny',
+  index: 'index.html',
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    const noCache = filePath.endsWith('.html');
+    if (noCache) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   dotfiles: 'deny',

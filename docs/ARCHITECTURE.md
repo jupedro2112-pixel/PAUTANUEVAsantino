@@ -5,8 +5,8 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-13** — webhook hgcash: con secreto en el panel, el de SSM
-> deja de valer (#323).
+> Última actualización: **2026-10-16** — filtro geográfico en landing: solo Argentina (#326).
+> Antes: 2026-10-13 — webhook hgcash: con secreto en el panel, el de SSM deja de valer (#323).
 > Antes: 2026-10-07 — reenvío de avisos hgcash configurable desde el panel
 > (#322, §5 AUTO-CARGA hgcash).
 > Antes: 2026-10-06 — REFERIDOS 2.0 (#317, réplica #168-#175 del gemelo):
@@ -1137,3 +1137,10 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
 - **`checkUsernameAvailability` (PWA)**: existe pero no se dispara — mejora pendiente.
 - **vercel.json es un artefacto** de un deploy anterior; el deploy real es AWS EB.
 - **Env DB_PASSWORD ya no se usa** (sección Base de Datos eliminada 2026-07-09).
+- **Landing solo accesible desde Argentina (#326, 2026-10-16)**: middleware `/landing/` valida la
+  geolocalización por IP (`geoip-lite`, offline); si `country !== 'AR'` → devuelve HTML vacío
+  (status 200). El `express.static` de `/landing` corre DESPUÉS del middleware (control en dos
+  capas). Mejora de tracking: bloquea bots de otros países. Si aparecen falsos positivos (usuarios
+  AR con VPN o proxy bloqueados), considerar whitelist de IPs o dejar que la Opción 2 (script
+  del cliente) sea el filtro final. La librería `geoip-lite` se actualiza raramente; para máxima
+  precisión usar una API o MaxMind comercial.
