@@ -8,6 +8,27 @@
 
 ## Sesión 2026-10-16
 
+### 329. Programar desde "✉️ Redactar notificación" + calendario con TODAS las notificaciones (réplica #191 de AUTOREEMBOLSOSjygactivo)
+- **Owner:** que el compositor (aviso simple sin regalo) también se pueda programar por fecha, que
+  eso aparezca en el calendario, y que el 📅 Cronograma muestre TODAS las notificaciones. Igual en
+  los 7 repos.
+- **Backend:** `src/routes/notificationRoutes.js`: el handler de `POST /api/notifications/send-batch`
+  pasó a `sendBatchPush(body)` (stub de `res` → `{http, body}`), la query del segmento a
+  `_pushSegmentQuery` y hay `countPushSegment`; exportados en el router. `ScheduledCampaign.kind` =
+  `'lote' | 'push'` (+ `manual`, `parts.note`). Cronograma: `SCHED_ADAPTER.sendPush/countPush`;
+  `POST /api/admin/cronograma` acepta `kind:'push'` (`{title, body, segment, batchSize, usernames}`,
+  sin tandas: sale en lotes de N con pausa de 1,5 s); `_schedRunPart` recorre los chunks hasta
+  `remaining = 0` y guarda `note`; `PUT` edita `payload.body` para push.
+- **Calendario con todo (`GET /api/admin/cronograma?month=`):** además de las campañas, ítems de
+  sólo lectura: lotes enviados A MANO (✋), plantillas automáticas habilitadas (`ScheduledNotif`, 🤖)
+  y envíos manuales del compositor (hook `setPushLogHook` → campaña push `manual:true`; lotes
+  sucesivos del mismo aviso en 6 h se acumulan). Históricos del compositor previos no existen.
+- **Panel (admin-sw v75):** en "Redactar notificación", bloque "📅 Cuándo sale" (ahora / programar
+  fecha-hora AR); los botones de enviar pasan a "📅 Programar…". En el cronograma: ícono por tipo
+  (🎁 lote · 📱 push · 🤖 automática · ✋ a mano), filas de sólo lectura con "🔎 Ver lote", leyenda.
+- **Validado:** `node --check` OK, HTML balanceado. **PROBAR:** programar un aviso a +2 min desde
+  el compositor y ver la chip 📱; mandar un lote a mano desde el compositor y ver ✋ en el día.
+
 ### 328. Vuelve "✉️ Redactar notificación" (aviso sin regalo: todos con app / por lote desde usuario N°)
 - **Owner (captura):** quiere el redactor simple: título + mensaje, modo "📱 Todos con app (de una
   sola vez)" o "📦 Por lote (segmentado)" con segmento, tamaño de lote, "Desde usuario N°", botones
