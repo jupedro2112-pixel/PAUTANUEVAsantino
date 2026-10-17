@@ -14,10 +14,15 @@
   carpeta `landing/` de este repo (verificado: el HTML en vivo es idéntico byte a byte a
   `landing/index.html` de HEAD). El middleware del #326 vive en `server.js` (AWS EB) bajo
   `/landing/`, una ruta por la que nadie entra → nunca se aplicó a la landing real.
-- **Fix (`landing/vercel.json`, nuevo):** rewrite de `/(.*)` a `/blank.html` (página vacía,
-  status 200) cuando el header `x-vercel-ip-country` que Vercel pone en cada request **no es
-  `AR`** (condición `missing` con value). Sin código: lo resuelve el edge de Vercel. Se publica
-  solo con el push (el proyecto está conectado a este repo).
+- **Fix (`landing/vercel.json`, nuevo):** ruta `/(.*)` → `/blank.html` (página vacía, status
+  200) cuando el header `x-vercel-ip-country` que Vercel pone en cada request **no es `AR`**
+  (condición `missing` con value). Sin código: lo resuelve el edge de Vercel. Se publica solo
+  con el push (el proyecto está conectado a este repo).
+  ⚠️ Va en formato **`routes`** (regla ANTES de `{"handle":"filesystem"}`), NO en `rewrites`:
+  los `rewrites` de Vercel corren DESPUÉS de buscar el archivo en disco, y como `index.html`
+  existe, se servía igual (primer intento, verificado desde Tor/Alemania: `/blank.html` ya
+  existía pero `/` seguía dando la landing). `routes` no se puede mezclar con
+  `rewrites/redirects/headers` en el mismo archivo.
 - El middleware de `server.js` queda (inofensivo): cubre sólo `/landing/` en EB.
 - ⚠️ Los robots de Meta (revisión de anuncios, preview de links) entran desde EE.UU. → ven la
   página en blanco. Si Meta rechaza un anuncio por "landing no funcional", agregar una excepción

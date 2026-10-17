@@ -1145,8 +1145,10 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   Todo lo que sea "comportamiento de la landing" va en `landing/` (HTML o `landing/vercel.json`),
   NUNCA en rutas `/landing/` de `server.js`: por ahí no entra nadie.
 - **Landing solo accesible desde Argentina (#326 → #331, 2026-10-17)**: `landing/vercel.json`
-  reescribe `/(.*)` a `/blank.html` (vacía, status 200) cuando el header `x-vercel-ip-country`
-  (lo pone Vercel por IP en cada request) no es `AR` (condición `missing` con value). Objetivo:
+  manda `/(.*)` a `/blank.html` (vacía, status 200) cuando el header `x-vercel-ip-country`
+  (lo pone Vercel por IP en cada request) no es `AR` (condición `missing` con value). Está en
+  formato `routes` con la regla ANTES de `{"handle":"filesystem"}`: en `rewrites` no funciona
+  porque Vercel sirve el archivo existente (`index.html`) antes de evaluar la regla. Objetivo:
   que los bots de otros países no ensucien el tracking. El middleware `/landing/` de `server.js`
   con `geoip-lite` (#326) quedó pero sólo cubre esa ruta en EB (nadie la usa). ⚠️ Los crawlers
   de Meta (revisión de anuncios / preview) vienen de EE.UU. y ven la página vacía: si Meta
