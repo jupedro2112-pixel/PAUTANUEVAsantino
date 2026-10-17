@@ -6,6 +6,28 @@
 >
 > **Última actualización: 2026-10-17**
 
+## Sesión 2026-10-17
+
+### 331. Filtro "solo Argentina" de la landing: ahora en VERCEL (el #326 no filtraba la landing real)
+- **Owner:** probó con VPN en Alemania y la landing se veía igual. Causa: la landing que ve la
+  gente (`grupogirox.com` / `girox-nard-onuevoo-w4of.vercel.app`) la sirve **Vercel** desde la
+  carpeta `landing/` de este repo (verificado: el HTML en vivo es idéntico byte a byte a
+  `landing/index.html` de HEAD). El middleware del #326 vive en `server.js` (AWS EB) bajo
+  `/landing/`, una ruta por la que nadie entra → nunca se aplicó a la landing real.
+- **Fix (`landing/vercel.json`, nuevo):** rewrite de `/(.*)` a `/blank.html` (página vacía,
+  status 200) cuando el header `x-vercel-ip-country` que Vercel pone en cada request **no es
+  `AR`** (condición `missing` con value). Sin código: lo resuelve el edge de Vercel. Se publica
+  solo con el push (el proyecto está conectado a este repo).
+- El middleware de `server.js` queda (inofensivo): cubre sólo `/landing/` en EB.
+- ⚠️ Los robots de Meta (revisión de anuncios, preview de links) entran desde EE.UU. → ven la
+  página en blanco. Si Meta rechaza un anuncio por "landing no funcional", agregar una excepción
+  por user-agent (`facebookexternalhit` / `meta-externalads`) en el mismo `vercel.json`.
+- **Probar:** con VPN fuera de AR → página en blanco; desde AR → landing normal; `?p=CODIGO`
+  sigue funcionando (la query no entra en el rewrite).
+- **Deploy:** zip 44 fallaba por 83 MB (llevaba `node_modules`, creado al instalar `geoip-lite`
+  en #326; `.gitignore` lo excluye, EB corre `npm install` solo). Zip limpio con `git archive`
+  = 2 MB (`PAUTANUEVAsantino45.zip`). `node_modules` local borrado.
+
 ## Sesión 2026-10-16
 
 ### 330. Botón "🎁 RECLAMAR" del lado del usuario para las fichas de un lote de notificación (réplica del #177/#191 de CARGASGIROX)

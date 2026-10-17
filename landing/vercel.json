@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "missing": [
+        { "type": "header", "key": "x-vercel-ip-country", "value": "AR" }
+      ],
+      "destination": "/blank.html"
+    }
+  ]
+}

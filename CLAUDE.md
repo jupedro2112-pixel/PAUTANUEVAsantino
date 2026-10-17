@@ -71,6 +71,10 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 - `src/models/` — schemas Mongoose canónicos (fuente de verdad).
 - `src/services/` — lógica (referidos, notificaciones, otp, metaCapi, fbAds, hgcash,
   comprobantes IA, analítica publicistas…).
+- `landing/` — landing de pauta. ⚠️ **La sirve VERCEL, no EB** (proyecto conectado a este
+  repo, raíz = `landing/`, dominio `grupogirox.com`; se publica con el push). Cambios de
+  comportamiento de la landing van en `landing/` (HTML o `landing/vercel.json`), no en rutas
+  `/landing/` de `server.js` (por ahí no entra nadie — error del #326, corregido en #331).
 - `public/` — PWA del cliente (namespace global `window.VIP`, SW único
   `firebase-messaging-sw.js`). `public/adminprivado2026/` — panel admin (~14k líneas
   de admin.js, cookie httpOnly, SW propio `admin-sw.js` con scope /adminprivado2026/).

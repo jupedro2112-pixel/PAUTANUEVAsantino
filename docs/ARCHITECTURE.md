@@ -5,7 +5,8 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-16** — filtro geográfico en landing: solo Argentina (#326).
+> Última actualización: **2026-10-17** — filtro "solo Argentina" de la landing movido a
+> Vercel (`landing/vercel.json`, #331); el middleware de EB del #326 no cubría la landing real.
 > Antes: 2026-10-13 — webhook hgcash: con secreto en el panel, el de SSM deja de valer (#323).
 > Antes: 2026-10-07 — reenvío de avisos hgcash configurable desde el panel
 > (#322, §5 AUTO-CARGA hgcash).
@@ -1137,13 +1138,19 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
 - **`checkUsernameAvailability` (PWA)**: existe pero no se dispara — mejora pendiente.
 - **vercel.json es un artefacto** de un deploy anterior; el deploy real es AWS EB.
 - **Env DB_PASSWORD ya no se usa** (sección Base de Datos eliminada 2026-07-09).
-- **Landing solo accesible desde Argentina (#326, 2026-10-16)**: middleware `/landing/` valida la
-  geolocalización por IP (`geoip-lite`, offline); si `country !== 'AR'` → devuelve HTML vacío
-  (status 200). El `express.static` de `/landing` corre DESPUÉS del middleware (control en dos
-  capas). Mejora de tracking: bloquea bots de otros países. Si aparecen falsos positivos (usuarios
-  AR con VPN o proxy bloqueados), considerar whitelist de IPs o dejar que la Opción 2 (script
-  del cliente) sea el filtro final. La librería `geoip-lite` se actualiza raramente; para máxima
-  precisión usar una API o MaxMind comercial.
+- **La landing NO la sirve EB: la sirve VERCEL.** La carpeta `landing/` de este repo es la
+  raíz del proyecto de Vercel `girox-nard-onuevoo-w4of` (dominios `grupogirox.com` y
+  `girox-nard-onuevoo-w4of.vercel.app`, cuenta `ro-bersantino`); se publica sola con cada push
+  a `main`. La landing llama al backend por CORS (`API_BASE_DEFAULT` en `landing/index.html`).
+  Todo lo que sea "comportamiento de la landing" va en `landing/` (HTML o `landing/vercel.json`),
+  NUNCA en rutas `/landing/` de `server.js`: por ahí no entra nadie.
+- **Landing solo accesible desde Argentina (#326 → #331, 2026-10-17)**: `landing/vercel.json`
+  reescribe `/(.*)` a `/blank.html` (vacía, status 200) cuando el header `x-vercel-ip-country`
+  (lo pone Vercel por IP en cada request) no es `AR` (condición `missing` con value). Objetivo:
+  que los bots de otros países no ensucien el tracking. El middleware `/landing/` de `server.js`
+  con `geoip-lite` (#326) quedó pero sólo cubre esa ruta en EB (nadie la usa). ⚠️ Los crawlers
+  de Meta (revisión de anuncios / preview) vienen de EE.UU. y ven la página vacía: si Meta
+  rechaza anuncios por eso, agregar excepción por user-agent en el mismo `vercel.json`.
 
 ## Cronograma de campañas programadas (#327, réplica del #190 de AUTOREEMBOLSOSjygactivo)
 
