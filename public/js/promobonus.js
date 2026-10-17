@@ -70,7 +70,7 @@
         box.innerHTML = '<div style="color:#ffd700;font-weight:900;font-size:13px;margin:0 0 8px;">🎁 Regalos para reclamar</div>'
             + _gifts.map(function (g) { return _giftHtml(g, true); }).join('');
     }
-    function _renderAll() { _renderHome(); renderPending('giftPendingBox'); renderPending('rwGiftsBox'); }
+    function _renderAll() { _renderHome(); renderPending('giftPendingBox'); renderPending('rwGiftsBox'); renderPending('giftClaimHome'); } // #333: también en el inicio del asistente
 
     async function claim(batchId, btn) {
         if (_claiming || !VIP.state || !VIP.state.currentToken) return;

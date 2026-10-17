@@ -865,6 +865,14 @@
                     animation:dashUserCtaPulse 2.4s ease-in-out infinite;
                 }
                 @keyframes dashUserCtaPulse { 0%,100%{opacity:1;} 50%{opacity:.55;} }
+                /* #333: cartel "¿Tenés un código de regalo?" (inicio del asistente + PREMIOS):
+                   siempre visible y con brillo pulsante para que llame la atención. */
+                .gift-code-cta { animation: giftCodeGlow 2.2s ease-in-out infinite; }
+                @keyframes giftCodeGlow {
+                    0%,100% { box-shadow: 0 0 0 0 rgba(255,215,0,0.0), 0 0 10px rgba(255,215,0,0.25); border-color: rgba(255,215,0,0.45); }
+                    50%     { box-shadow: 0 0 0 3px rgba(255,215,0,0.18), 0 0 22px rgba(255,215,0,0.6); border-color: rgba(255,215,0,0.95); }
+                }
+                .gift-code-cta .gift-code-btn { animation: dashUserCtaPulse 2.2s ease-in-out infinite; }
                 /* (owner 2026-08-25) CSS de la ruleta diaria removido — feature eliminada. Ver WORKLOG #235. */
                 .dash-refunds {
                     flex:1; min-width:0; background:linear-gradient(135deg,#1a0033,#0a0015);
@@ -2231,10 +2239,10 @@
     <script src="/js/fire.js"></script>
     <script src="/js/reviews.js"></script>
     <script src="/js/notifications.js"></script>
-    <script src="/js/ui.js?v=332"></script>
+    <script src="/js/ui.js?v=333"></script>
     <script src="/js/withdraw.js"></script>
     <script src="/js/installbonus.js"></script>
-    <script src="/js/promobonus.js?v=330"></script>
+    <script src="/js/promobonus.js?v=333"></script>
     <script src="/js/notifsurvey.js"></script>
     <script src="/js/publisherwelcome.js"></script>
     <script src="/js/apptest.js"></script>

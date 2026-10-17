@@ -2476,6 +2476,17 @@ VIP.ui.casinoBotGo = function(state) {
       '<div style="font-size:11px;opacity:.8;">Tocá: se copia tu link y elegís por dónde mandarlo 👉</div></div></div>');
     if (!VIP.ui._rwRef) { try { VIP.ui._rwLoadReferrals(); } catch (e) {} } // precargar el link
     if (_rb) { _rb.style.border = '1px solid rgba(255,152,0,0.55)'; _rb.style.background = 'linear-gradient(135deg,rgba(255,152,0,0.12),rgba(255,152,0,0.04))'; }
+    // #333 (owner: "que aparezca SIEMPRE el cartel, para que llame la atención"): regalos de
+    // fichas pendientes para RECLAMAR (#330, los pinta promobonus.js en #giftClaimHome) +
+    // cartel fijo con brillo "¿Tenés un código de regalo?" → modal "Reclamar Bono con Código".
+    VIP.ui._botMsg('<div id="giftClaimHome"></div>');
+    const _gc = VIP.ui._botMsg('<div onclick="if(window.openWelcomeCodeModal)openWelcomeCodeModal()" style="display:flex;align-items:center;gap:9px;cursor:pointer;">' +
+      '<span style="font-size:26px;flex:none;">🎟️</span>' +
+      '<div style="flex:1;min-width:0;line-height:1.3;"><b style="color:#ffd700;">¿Tenés un código de regalo?</b> Canjealo acá y tu bono queda activo al instante.' +
+      '<div style="font-size:11px;opacity:.85;">Los códigos llegan por notificación, Telegram o redes 👉</div></div>' +
+      '<span class="gift-code-btn" style="flex:none;background:linear-gradient(135deg,#ffd700,#f0a500);color:#1a0b2e;border-radius:9px;padding:8px 10px;font-weight:900;font-size:12px;">CANJEAR</span></div>');
+    if (_gc) { _gc.classList.add('gift-code-cta'); _gc.style.border = '2px solid rgba(255,215,0,0.45)'; _gc.style.background = 'linear-gradient(135deg,rgba(255,215,0,0.14),rgba(255,160,0,0.06))'; }
+    try { if (VIP.promoBonus) { VIP.promoBonus.renderPending('giftClaimHome'); VIP.promoBonus.loadGifts(); } } catch (e) {}
     // (owner 2026-09-02: se SACÓ del asistente el "Estás como X" + botón
     // "Cambiar de cuenta / Salir" de #252 — no quiere que el cliente pueda
     // cerrar sesión desde el widget. VIP.ui.casinoLogout queda definido por si
@@ -3751,14 +3762,15 @@ VIP.ui.openRewardsHub = function(focus) {
         // #332: entrada al canje por CÓDIGO desde PREMIOS. El modal "Reclamar Bono con Código"
         // (lotes por código + código de bienvenida + lista de regalos para RECLAMAR) sólo se
         // abría desde el menú ☰ del dashboard viejo, tapado por el casino → acá no había forma.
-        '<div style="background:linear-gradient(135deg,rgba(255,215,0,0.10),rgba(255,160,0,0.06));border:1px solid rgba(255,215,0,0.35);border-radius:16px;padding:12px 16px;">' +
+        // #333: siempre visible y con brillo pulsante (.gift-code-cta, CSS inline de index.html).
+        '<div class="gift-code-cta" onclick="if(window.openWelcomeCodeModal)openWelcomeCodeModal()" style="cursor:pointer;background:linear-gradient(135deg,rgba(255,215,0,0.14),rgba(255,160,0,0.07));border:2px solid rgba(255,215,0,0.45);border-radius:16px;padding:12px 16px;">' +
           '<div style="display:flex;align-items:center;gap:10px;">' +
-            '<span style="font-size:26px;line-height:1;">🎟️</span>' +
+            '<span style="font-size:30px;line-height:1;">🎟️</span>' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="font-size:13.5px;font-weight:900;color:#ffd700;">¿TENÉS UN CÓDIGO DE REGALO?</div>' +
-              '<div style="font-size:11.5px;color:#c9d1dc;margin-top:2px;line-height:1.35;">Si te llegó un código por notificación, Telegram o redes, canjealo acá y el bono queda activo en tu cuenta.</div>' +
+              '<div style="font-size:14px;font-weight:900;color:#ffd700;">¿TENÉS UN CÓDIGO DE REGALO?</div>' +
+              '<div style="font-size:11.5px;color:#e6ebf2;margin-top:2px;line-height:1.35;">Si te llegó un código por notificación, Telegram o redes, canjealo acá y el bono queda activo al instante.</div>' +
             '</div>' +
-            '<button type="button" onclick="if(window.openWelcomeCodeModal)openWelcomeCodeModal()" style="background:linear-gradient(135deg,#ffd700,#f0a500);color:#1a0b2e;border:none;border-radius:10px;padding:10px 12px;font-weight:900;font-size:12.5px;cursor:pointer;white-space:nowrap;">CANJEAR</button>' +
+            '<button type="button" class="gift-code-btn" style="background:linear-gradient(135deg,#ffd700,#f0a500);color:#1a0b2e;border:none;border-radius:10px;padding:10px 12px;font-weight:900;font-size:12.5px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.35);">CANJEAR</button>' +
           '</div>' +
         '</div>' +
         cards + '</div>' +

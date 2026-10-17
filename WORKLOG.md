@@ -8,6 +8,19 @@
 
 ## Sesión 2026-10-17
 
+### 333. Cartel "🎟️ ¿Tenés un código de regalo?" SIEMPRE visible y con brillo (inicio del asistente + PREMIOS) + regalos pendientes en el inicio
+- **Owner (sobre #332):** "claro, que aparezca siempre el cartel, para que también llame la atención".
+- **PWA (ui.js ?v=333, promobonus.js ?v=333, SW v197):**
+  - Inicio del asistente (`_botState 'home'`, debajo del banner de referidos #308): contenedor
+    `#giftClaimHome` donde `promobonus.js` pinta los regalos de fichas pendientes para RECLAMAR
+    (#330; antes en modo casino no se veían en ningún inicio: `#giftClaimCard` está en el
+    dashboard viejo, tapado) + cartel fijo "🎟️ ¿Tenés un código de regalo? … CANJEAR" →
+    `openWelcomeCodeModal()`.
+  - PREMIOS: la card del #332 pasa a ser clickeable entera, borde dorado de 2 px y brillo.
+  - CSS inline en index.html: `.gift-code-cta` (keyframes `giftCodeGlow`, resplandor dorado
+    pulsante) y `.gift-code-btn` (parpadeo suave del botón).
+- **Validado:** `node --check` (ui.js, promobonus.js, SW). **Back necesita redeploy.**
+
 ### 332. PREMIOS: card "🎟️ ¿Tenés un código de regalo?" → abre el modal de canje (antes no había forma desde el casino)
 - **Owner:** "no aparece en PREMIOS para cargar un bono de lote de notificaciones". Chequeado en
   producción (`1giroxauto.com`): el #330 SÍ está desplegado (servidor, `promobonus.js`, SW v195,

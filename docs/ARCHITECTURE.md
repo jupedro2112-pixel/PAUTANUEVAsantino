@@ -1186,4 +1186,7 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   "Reclamar Bono con Código": lotes por código, código de bienvenida y lista de regalos). Antes
   ese modal sólo se abría desde el menú ☰ del dashboard viejo (tapado por el casino). El modal
   se fuerza a `z-index 2147483000` al abrir (igual que `#referralModal`): `.modal` es 10000 y
-  quedaba debajo del casino (99999) y del hub (2147482900).
+  quedaba debajo del casino (99999) y del hub (2147482900). **#333:** el mismo cartel va también
+  en el inicio del asistente (siempre visible, clase `.gift-code-cta` con brillo pulsante) y ahí
+  `promobonus.js` pinta además los regalos pendientes en `#giftClaimHome` (en modo casino el
+  `#giftClaimCard` del dashboard viejo no se ve).
