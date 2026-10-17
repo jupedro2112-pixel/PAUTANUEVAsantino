@@ -2231,7 +2231,7 @@
     <script src="/js/fire.js"></script>
     <script src="/js/reviews.js"></script>
     <script src="/js/notifications.js"></script>
-    <script src="/js/ui.js?v=320"></script>
+    <script src="/js/ui.js?v=332"></script>
     <script src="/js/withdraw.js"></script>
     <script src="/js/installbonus.js"></script>
     <script src="/js/promobonus.js?v=330"></script>
@@ -4172,6 +4172,9 @@
         }
 
         window.openWelcomeCodeModal = async function () {
+            // #332: el cliente vive DENTRO del casino (z-index 99999) y el hub PREMIOS está en
+            // 2147482900 → el modal (.modal = 10000) quedaba tapado. Mismo valor que #referralModal.
+            try { document.getElementById('welcomeCodeModal').style.zIndex = '2147483000'; } catch (_) {}
             showModal('welcomeCodeModal');
             // #330 regalos para RECLAMAR (fichas de lote) arriba del canje por código
             try { if (VIP.promoBonus) { VIP.promoBonus.renderPending('giftPendingBox'); VIP.promoBonus.loadGifts(); } } catch (_) {}

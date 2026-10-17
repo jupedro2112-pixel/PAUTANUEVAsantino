@@ -8,6 +8,26 @@
 
 ## Sesión 2026-10-17
 
+### 332. PREMIOS: card "🎟️ ¿Tenés un código de regalo?" → abre el modal de canje (antes no había forma desde el casino)
+- **Owner:** "no aparece en PREMIOS para cargar un bono de lote de notificaciones". Chequeado en
+  producción (`1giroxauto.com`): el #330 SÍ está desplegado (servidor, `promobonus.js`, SW v195,
+  `GET /api/gift/pending` responde). Lo que faltaba: la card dorada "RECLAMAR" del #330 sólo
+  aparece cuando el cliente tiene un regalo pendiente de un lote **fichas por tiempo** vigente
+  (creado después del deploy; los admins ven la lista vacía). Para un lote **por código** el
+  cliente tiene que abrir "Reclamar Bono con Código", y ese modal sólo se abría desde el menú ☰
+  del dashboard viejo, tapado por el casino → desde PREMIOS no había ninguna opción.
+- **PWA (ui.js ?v=332, SW v196):** card fija arriba del hub 🎁 PREMIOS (debajo de la lista de
+  regalos `#rwGiftsBox`): "🎟️ ¿TENÉS UN CÓDIGO DE REGALO? … CANJEAR" → `openWelcomeCodeModal()`
+  (mismo modal: lotes por código, código de bienvenida de la comunidad y, arriba, los regalos para
+  RECLAMAR). `openWelcomeCodeModal` fuerza `z-index 2147483000` en el modal (como
+  `#referralModal`): `.modal` es 10000 y quedaba debajo del casino (99999) y del hub (2147482900).
+- **Si después del deploy sigue sin verse:** la PWA sirve `/js/` con stale-while-revalidate → la
+  primera apertura trae el `ui.js` viejo y recién la segunda el nuevo (cerrar y volver a abrir la
+  app). Y probar con una cuenta de CLIENTE, no de admin.
+- **Validado:** `node --check` (ui.js, SW). **Back necesita redeploy** (sirve la PWA). PROBAR:
+  abrir PREMIOS → card 🎟️ → CANJEAR abre el modal por encima del casino; pegar el código de un
+  lote → bono activo; lote fichas por tiempo → card dorada RECLAMAR arriba de la 🎟️.
+
 ### 331. Filtro "solo Argentina" de la landing: ahora en VERCEL (el #326 no filtraba la landing real)
 - **Owner:** probó con VPN en Alemania y la landing se veía igual. Causa: la landing que ve la
   gente (`grupogirox.com` / `girox-nard-onuevoo-w4of.vercel.app`) la sirve **Vercel** desde la

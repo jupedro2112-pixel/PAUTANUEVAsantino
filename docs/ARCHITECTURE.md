@@ -5,8 +5,10 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-17** — filtro "solo Argentina" de la landing movido a
-> Vercel (`landing/vercel.json`, #331); el middleware de EB del #326 no cubría la landing real.
+> Última actualización: **2026-10-17** — card "¿Tenés un código de regalo?" en PREMIOS que
+> abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
+> "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
+> EB del #326 no cubría la landing real.
 > Antes: 2026-10-13 — webhook hgcash: con secreto en el panel, el de SSM deja de valer (#323).
 > Antes: 2026-10-07 — reenvío de avisos hgcash configurable desde el panel
 > (#322, §5 AUTO-CARGA hgcash).
@@ -1178,3 +1180,10 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   `GET /api/gift/pending`). PWA: `public/js/promobonus.js` pinta la card en `#giftClaimCard`
   (home), `#rwGiftsBox` (hub PREMIOS) y `#giftPendingBox` (modal de código). Un lote de fichas
   nuevo que quiera acreditar directo tiene que pasar por `_notifBatchFichasAfterClaim` igual.
+  ⚠️ La card dorada SOLO aparece si el cliente tiene un regalo pendiente (lote fichas por tiempo,
+  vigente, creado con el #330 ya desplegado; los admins ven `[]`). **#332:** el hub PREMIOS tiene
+  además una card fija "🎟️ ¿Tenés un código de regalo?" → `openWelcomeCodeModal()` (modal
+  "Reclamar Bono con Código": lotes por código, código de bienvenida y lista de regalos). Antes
+  ese modal sólo se abría desde el menú ☰ del dashboard viejo (tapado por el casino). El modal
+  se fuerza a `z-index 2147483000` al abrir (igual que `#referralModal`): `.modal` es 10000 y
+  quedaba debajo del casino (99999) y del hub (2147482900).

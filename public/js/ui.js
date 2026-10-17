@@ -3747,7 +3747,21 @@ VIP.ui.openRewardsHub = function(focus) {
         '<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:0.5px;margin-top:4px;">TUS PREMIOS</div>' +
         '<div style="font-size:12px;color:#9aa4b0;margin-top:2px;">Ruletas, bonos y cashback — todo acá</div>' +
       '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:14px;"><div id="rwGiftsBox"></div>' + cards + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:14px;"><div id="rwGiftsBox"></div>' +
+        // #332: entrada al canje por CÓDIGO desde PREMIOS. El modal "Reclamar Bono con Código"
+        // (lotes por código + código de bienvenida + lista de regalos para RECLAMAR) sólo se
+        // abría desde el menú ☰ del dashboard viejo, tapado por el casino → acá no había forma.
+        '<div style="background:linear-gradient(135deg,rgba(255,215,0,0.10),rgba(255,160,0,0.06));border:1px solid rgba(255,215,0,0.35);border-radius:16px;padding:12px 16px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            '<span style="font-size:26px;line-height:1;">🎟️</span>' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-size:13.5px;font-weight:900;color:#ffd700;">¿TENÉS UN CÓDIGO DE REGALO?</div>' +
+              '<div style="font-size:11.5px;color:#c9d1dc;margin-top:2px;line-height:1.35;">Si te llegó un código por notificación, Telegram o redes, canjealo acá y el bono queda activo en tu cuenta.</div>' +
+            '</div>' +
+            '<button type="button" onclick="if(window.openWelcomeCodeModal)openWelcomeCodeModal()" style="background:linear-gradient(135deg,#ffd700,#f0a500);color:#1a0b2e;border:none;border-radius:10px;padding:10px 12px;font-weight:900;font-size:12.5px;cursor:pointer;white-space:nowrap;">CANJEAR</button>' +
+          '</div>' +
+        '</div>' +
+        cards + '</div>' +
     '</div>';
   document.body.appendChild(ov);
   // #330 regalos de fichas para RECLAMAR (lotes de notificación) arriba de todo en PREMIOS.
