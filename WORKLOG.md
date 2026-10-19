@@ -8,6 +8,20 @@
 
 ## Sesión 2026-10-19
 
+### 335. `docs/REPLICA-REFERIDOS-2.0.md`: la réplica de referidos en formato REPLICA-SESION (un solo .md, código completo adentro)
+- **Owner (sobre #334):** "usá otro formato: giroxNARDOnuevoo con PAUTANUEVAsantino" — es para un
+  colega con una repo gemela, no para aplicar acá. El formato que se usa entre esas dos repos es
+  `docs/REPLICA-SESION-*.md`: un único documento que se pega como prompt inicial en la otra repo,
+  con "INSTRUCCIONES PARA EL ASISTENTE", FEATURE por FEATURE con el código completo, PROBAR por
+  sección, NO REPLICAR y CIERRE.
+- **Qué tiene (2.692 líneas, autocontenido):** F1 backend `src/` (los 3 archivos finales enteros +
+  diffs de controller/calculation/routes), F2 `server.js` (requires, cron #307, comandos,
+  `/linkreferido`, `/api/rewards/summary`, las rutas nuevas), F3 PWA (CSS, modales, IIFE de
+  referidos, app.js, auth.js, hub, asistente, pie del widget, SW), F4 panel (HTML + bloques nuevos
+  + diff de las funciones existentes). Generado con un script desde el estado real del repo (no a
+  mano). Las imágenes del popup se piden aparte (`public/img/referidos-promo-*.jpg`).
+- El paquete del #334 (`docs/replicas/referidos-2.0/`) queda como fuente (parches + snippets).
+
 ### 334. Paquete portable de REFERIDOS 2.0 para replicar en otro repo (`docs/replicas/referidos-2.0/`)
 - **Owner:** "pasame para copiar y pegar a otro repo las últimas modificaciones de referidos" (el
   otro repo es igual pero tiene los referidos viejos: sin dashboard nuevo, sin popup, sin niveles).
