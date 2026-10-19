@@ -63,6 +63,8 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   global de bonos (#278) y del cruce de multicuenta por titular del comprobante (#279).
 - `docs/ESPEC-REEMBOLSO-1GIROX.md` — cómo DEBE funcionar el reembolso/cashback sobre
   plata real (fórmula, datos de la API, casos de prueba) — portable a otros repos 1girox.
+- `docs/replicas/referidos-2.0/` — paquete portable (README + parches + archivos + snippets +
+  imágenes) de Referidos 2.0 (#307–#319) para replicar en otro repo 1girox con referidos viejos.
 - `docs/CLONACION-PASO-A-PASO.txt` — runbook probado para clonar TODO el proyecto a
   otra cuenta AWS desde CloudShell (usa `scripts/aws-export-config.sh` +
   `scripts/aws-bootstrap-clone.sh`, etapas iam/ssm/redis/cert/eb/sg/https/deploy).

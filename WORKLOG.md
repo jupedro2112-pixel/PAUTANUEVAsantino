@@ -4,7 +4,23 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-17**
+> **Última actualización: 2026-10-19**
+
+## Sesión 2026-10-19
+
+### 334. Paquete portable de REFERIDOS 2.0 para replicar en otro repo (`docs/replicas/referidos-2.0/`)
+- **Owner:** "pasame para copiar y pegar a otro repo las últimas modificaciones de referidos" (el
+  otro repo es igual pero tiene los referidos viejos: sin dashboard nuevo, sin popup, sin niveles).
+- **Qué hay:** README con el orden de aplicación bloque por bloque + reglas del owner + checklist
+  de prueba; parches reales commit por commit de #307, #308, #308b, #308c, #314, #317, #318 y #319
+  (`01-backend-src`, `02-server`, `03-pwa`, `04-panel`, `05-docs`); copias COMPLETAS de los 6
+  archivos de `src/` de referidos (`files/`); los bloques grandes del front ya extraídos del estado
+  final (`snippets/`: IIFE de referidos de ui.js, card del hub, banner del asistente, pie del
+  widget, CSS y modales de index.html, actividad/ranking y niveles del panel); las 2 imágenes del
+  popup (`img/`).
+- ⚠️ `~/Documents/giroxNARDOnuevoo` (el otro repo local) NO tiene el hub PREMIOS ni el asistente
+  (`/api/rewards/summary`, `openRewardsHub`, `casinoBotGo` dan 0): ahí aplican solo el backend, el
+  modal + popup + chooser y el panel; el README lo marca como opcional. Sin cambios de código acá.
 
 ## Sesión 2026-10-17
 
