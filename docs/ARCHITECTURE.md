@@ -5,8 +5,8 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-19** — réplica de Referidos 2.0 para la repo gemela:
-> `docs/REPLICA-REFERIDOS-2.0.md` (#335) + fuente `docs/replicas/referidos-2.0/` (#334, §5 Referidos). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
+> Última actualización: **2026-10-19** — se eliminaron los docs de réplica/espec entre repos
+> (`docs/replicas/`, `REPLICA-*.md`, `ESPEC-*.md`; #336). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
 > abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
 > "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
 > EB del #326 no cubría la landing real.
@@ -853,9 +853,7 @@ VIPCARGAS con su JWT, y el cliente nunca más necesita conocer su clave del casi
   **Pago AUTOMÁTICO el día 1** (`_runMonthlyReferralPayout`, reserva
   `Config referral_autorun_<YYYY-MM>`, `adminUsername:'auto-referidos'`); los botones
   del panel siguen para casos puntuales. Ver §4.6.
-  **Referidos 2.0 (#317, réplica #168-#175 del gemelo)** — para llevarlo a otro repo está el
-  doc `docs/REPLICA-REFERIDOS-2.0.md` (#335, formato REPLICA-SESION, código completo) y la
-  fuente `docs/replicas/referidos-2.0/` (#334: parches + snippets):
+  **Referidos 2.0 (#317, réplica #168-#175 del gemelo):**
   - Cliente: `GET /api/referrals/dashboard` (link, totales, tabla por referido con el
     netwin del MES en vivo — mes ART en curso, cache 15 min por usuario, concurrencia 4,
     tope 60 — y el nivel/próximo nivel). PWA: modal `#referralModal` + popup

@@ -8,6 +8,15 @@
 
 ## Sesión 2026-10-19
 
+### 336. Eliminados TODOS los docs de réplica/espec entre repos (quedaron viejos)
+- **Owner:** "sacá esto de replicas y todo lo que sea para pasar de una repo a otra, porque
+  quedó todo viejo". Borrados: `docs/replicas/` (paquete #334 + zip), `docs/REPLICA-REFERIDOS-2.0.md`
+  (#335), `docs/REPLICA-SESION-2026-08-10.md`, `docs/REPLICA-SESION-2026-08-14.md`,
+  `docs/ESPEC-REEMBOLSO-1GIROX.md`, `docs/ESPEC-ROLLOVER-GLOBAL-Y-MULTICUENTA-TITULAR.md`.
+  Quedan solo los docs de infra propios (`CLONACION-*`, `MIGRACION-AWS.md`) y ARCHITECTURE.
+- Referencias limpiadas en CLAUDE.md (lista de docs) y ARCHITECTURE.md (encabezado y §5
+  Referidos). Rollback: `git revert` de este commit recupera todo.
+
 ### 335. `docs/REPLICA-REFERIDOS-2.0.md`: la réplica de referidos en formato REPLICA-SESION (un solo .md, código completo adentro)
 - **Owner (sobre #334):** "usá otro formato: giroxNARDOnuevoo con PAUTANUEVAsantino" — es para un
   colega con una repo gemela, no para aplicar acá. El formato que se usa entre esas dos repos es
