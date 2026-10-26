@@ -178,11 +178,19 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   El compositor push (`/api/notifications/send-batch`) es un wrapper de `sendBatchPush` en
   `notificationRoutes.js` (misma regla: lo nuevo del envío va en la función).
 
+- **Funciones replicadas de PICA ROJA (#337+):** TODAS detrás de `featureFlags.isOn(x)` (`Config['features']`,
+  COMANDOS → "🧩 Funciones", default OFF). Una ruta/cron nuevo de esas funciones consulta su flag (404 `FEATURE_OFF`
+  / no-op). `legacyNotifs` apaga el sistema automático anterior (reglas, encuesta, estrategia programada); lo
+  manual no depende de él. Registro: `Config['registrationMode']` `open` (default) | `invite`
+  (`_inviteOnlyBlocks` en register + OTP). `GET /api/config/access` es público y la PWA lo pide al arrancar.
+
 ## Flujo de trabajo del asistente
 
 1. Leer `WORKLOG.md` al iniciar.
-2. Hacer el cambio. Validar sintaxis (`node --check` en archivos tocados — no hay
-   node_modules local, así que no se puede correr el server; sólo syntax check).
+2. Hacer el cambio. Validar sintaxis (`node --check` en archivos tocados) **y, si se tocó
+   `server.js`, correr `node scripts/check-tdz.js`** (detecta usos de nivel superior antes de
+   su `require` y rutas antes de `const authMiddleware`: `node --check` NO los ve y tumban el
+   server al arrancar). No hay node_modules local, así que no se puede correr el server.
 3. **Docs, SIEMPRE y SIN que el owner lo pida** (lo pidió explícito el 2026-09-30:
    "que no tenga que decirte qué actualizar"). En el MISMO commit del cambio:
    - `WORKLOG.md`: entrada nueva arriba (numerada, bajo "Sesión AAAA-MM-DD") + la fecha

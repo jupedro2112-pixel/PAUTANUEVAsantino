@@ -328,6 +328,8 @@
         .notif-banner-close:hover {
             background: rgba(255, 255, 255, 0.2);
         }
+        /* #337 registro sólo con invitación */
+        body.reg-invite #registerBtnWrap, body.reg-invite #adServiceRegisterBtn { display: none !important; }
         /* #317 referidos 2.0 (réplica #168-#175): card del home, popup y modal */
                 /* #168 Card INVITÁ A TUS AMIGOS (home) */
                 .dash-ref { background:linear-gradient(135deg,#1a0033,#2d0052); border:1.5px solid #d4af37; border-radius:13px; padding:9px 11px; color:#fff; box-shadow:0 3px 12px rgba(212,175,55,.35); }
@@ -528,7 +530,9 @@
                 <p style="color: #b0b0b0; font-size: 11px; margin: 0; line-height: 1.4;">Es opcional, pero te da seguridad total: vas a poder iniciar sesión con tu número por SMS y recuperar tu cuenta si olvidás la clave.</p>
             </div>
 
-            <div style="margin: 8px 0; text-align: center;">
+            <!-- #337: registro sólo con invitación → se esconde "Registrarse" y se muestra el aviso del panel (/sys_register_invite) -->
+            <p id="lgInviteNote" style="display:none;background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.35);border-radius:10px;padding:9px 11px;margin:8px 0;color:#e8d9a0;font-size:12px;line-height:1.45;text-align:left;"></p>
+            <div id="registerBtnWrap" style="margin: 8px 0; text-align: center;">
                 <span style="color: #888; font-size: 13px;">¿No tienes cuenta?</span>
                 <button id="registerBtn" class="btn btn-secondary" style="margin-top: 6px; width: 100%;">📝 Registrarse</button>
             </div>
@@ -2232,7 +2236,7 @@
     <script src="/js/config.js"></script>
     <script src="/js/campaign.js"></script>
     <script src="/js/meta-pixel.js"></script>
-    <script src="/js/auth.js?v=319"></script>
+    <script src="/js/auth.js?v=337"></script>
     <script src="/js/socket.js"></script>
     <script src="/js/chat.js"></script>
     <script src="/js/refunds.js"></script>

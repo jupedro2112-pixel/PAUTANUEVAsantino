@@ -5,7 +5,9 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-19** — se eliminaron los docs de réplica/espec entre repos
+> Última actualización: **2026-10-26** — réplica de PICA ROJA tanda 1: interruptores de funciones
+> (`featureFlags`, §10), registro abierto / sólo con invitación, `GET /api/config/access` y sistema de
+> notificaciones anterior apagado (#337). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
 > (`docs/replicas/`, `REPLICA-*.md`, `ESPEC-*.md`; #336). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
 > abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
 > "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
@@ -1191,3 +1193,20 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   en el inicio del asistente (siempre visible, clase `.gift-code-cta` con brillo pulsante) y ahí
   `promobonus.js` pinta además los regalos pendientes en `#giftClaimHome` (en modo casino el
   `#giftClaimCard` del dashboard viejo no se ve).
+
+## 10. Interruptores de funciones y modo de registro (#337, réplica de PICAROJA30 vía CARGASGIROX #208)
+
+- **`src/services/featureFlags.js`** — `Config['features']` = `{ datosIa, fraudRadar, notifCenter, autopilot,
+  stories, legacyNotifs }`, **todo `false` por default**, cache 30 s por proceso. `isOn(name)`, `getAll()`,
+  `set(patch, by)`. Rutas `GET/POST /api/admin/features` (POST solo admin general). Hooks `onFeaturesChanged(fn)`
+  en server.js (p. ej. limpiar lo que una función programó al apagarla). Panel: COMANDOS → "🧩 Funciones"; los
+  `.nav-item[data-feature]` se esconden si el flag está OFF (`applyFeatureNav`). Regla: **toda función replicada de
+  PICA ROJA consulta su flag** en sus rutas (responder 404 `FEATURE_OFF` / `{ok:false, off:true}` apagada) y al
+  principio de cada cron.
+- `legacyNotifs` = el sistema automático anterior de esta página (reglas `NotificationRule`, encuesta, estrategia
+  programada `ScheduledNotif`). Los envíos manuales (compositor, lotes, cronograma a mano) no dependen de él.
+- **Registro:** `Config['registrationMode']` `'open'|'invite'` (`getRegistrationMode`, `_inviteOnlyBlocks`). En
+  `invite`, `/api/auth/register` y `/api/auth/send-register-otp` → `403 INVITE_ONLY` salvo código de referido real o
+  campaña activa. Aviso `/sys_register_invite`. **`GET /api/config/access`** (público, `no-store`) publica
+  `registrationMode`, `registerInviteText` y `features.stories`; `auth.js` lo pide al cargar, pone `body.reg-invite`
+  y dispara `document` → `vip:access-config` (detail = la respuesta) para los módulos que arrancan después.

@@ -67,6 +67,7 @@ const {
 const ReferralEvent = require('./src/models/ReferralEvent');
 const Campaign = require('./src/models/Campaign');
 const CampaignClick = require('./src/models/CampaignClick');
+const featureFlags = require('./src/services/featureFlags'); // #337 interruptores de las funciones replicadas de PICA ROJA
 const InfluencerStory = require('./src/models/InfluencerStory');
 const ChatDelay = require('./src/models/ChatDelay');
 const Comprobante = require('./src/models/Comprobante');
@@ -3804,6 +3805,80 @@ const publisherAdminMiddleware = (req, res, next) => {
   next();
 };
 
+// ============================================================
+// #337 FUNCIONES REPLICADAS DE PICA ROJA (PICAROJA30) — interruptores en COMANDOS
+// ============================================================
+// Todas arrancan APAGADAS (`featureFlags.DEFAULTS`). Panel → COMANDOS → "🧩 Funciones": solo el admin general
+// las prende/apaga. Cada motor/ruta de esas funciones consulta `featureFlags.isOn(nombre)` (cache 30 s).
+// Al apagar el piloto automático se borran las campañas futuras que él programó (hook `_onFeaturesChanged`).
+const _featureHooks = [];
+function onFeaturesChanged(fn) { if (typeof fn === 'function') _featureHooks.push(fn); }
+async function _onFeaturesChanged(info, by) {
+  for (const fn of _featureHooks) { try { await fn(info, by); } catch (e) { logger.warn(`[features] hook falló: ${e.message}`); } }
+}
+app.get('/api/admin/features', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    res.json({ success: true, features: await featureFlags.getAll(), defaults: featureFlags.DEFAULTS, labels: featureFlags.LABELS, canEdit: req.user.role === 'admin' });
+  } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
+});
+app.post('/api/admin/features', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo el administrador general.' });
+    const patch = (req.body && typeof req.body.features === 'object') ? req.body.features : (req.body || {});
+    const info = await featureFlags.set(patch, req.user.username);
+    if (info.changed.length) {
+      logger.info(`[features] ${req.user.username}: ${info.changed.map(k => k + '=' + (info.after[k] ? 'ON' : 'OFF')).join(', ')}`);
+      await _onFeaturesChanged(info, req.user.username);
+    }
+    res.json({ success: true, features: info.after, changed: info.changed });
+  } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// #337 (réplica de #748/#975 de PICA ROJA): MODO DE REGISTRO. Config['registrationMode'] = 'open' (default: cualquiera
+// se registra desde la app con usuario + clave + SMS) | 'invite' (SÓLO CON INVITACIÓN: desde la app solo se registra
+// quien trae un código de referido de un cliente real o llega por un link de publicidad con campaña activa; la landing
+// externa no cambia porque ya exige campaña activa). Iniciar sesión sigue abierto siempre. Tilde en COMANDOS →
+// "👤 Registro de clientes". El aviso que ve la gente se edita en COMANDOS → /sys_register_invite.
+const REGISTER_INVITE_DEFAULT = '🔒 El registro es sólo con invitación, por seguridad. Pedile el link a quien te recomendó o entrá por nuestra publicidad oficial. Si ya sos cliente, iniciá sesión con tu usuario y clave.';
+async function getRegistrationMode() {
+  try { const v = await getConfig('registrationMode', 'open'); return v === 'invite' ? 'invite' : 'open'; } catch (_) { return 'open'; }
+}
+// Devuelve null si el registro puede seguir; si no, el texto del aviso (403 INVITE_ONLY).
+async function _inviteOnlyBlocks(referralCode, campaignCode) {
+  try {
+    if ((await getRegistrationMode()) !== 'invite') return null;
+    const ref = String(referralCode || '').toUpperCase().trim(); const camp = String(campaignCode || '').toUpperCase().trim();
+    if (ref && await User.exists({ referralCode: ref })) return null;
+    if (camp && await Campaign.exists({ code: camp, isActive: { $ne: false } })) return null;
+    return await renderSystemCommand('/sys_register_invite', REGISTER_INVITE_DEFAULT, {});
+  } catch (_) { return null; }
+}
+app.get('/api/admin/registration-mode', authMiddleware, adminMiddleware, async (req, res) => {
+  res.json({ success: true, mode: await getRegistrationMode(), canEdit: req.user.role === 'admin' });
+});
+app.post('/api/admin/registration-mode', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo el administrador general.' });
+    const mode = req.body && req.body.mode === 'invite' ? 'invite' : 'open';
+    await Config.set('registrationMode', mode, req.user.username);
+    logger.info(`[registration-mode] ${mode === 'invite' ? 'SÓLO CON INVITACIÓN' : 'ABIERTO'} por ${req.user.username}`);
+    res.json({ success: true, mode });
+  } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// #337 Config PÚBLICA de acceso (la PWA la pide al arrancar, sin sesión): modo de registro (abierto / sólo con
+// invitación) + funciones públicas prendidas (historias → anillo en el ingreso). Mismo path que el gemelo CARGASGIROX.
+app.get('/api/config/access', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const out = { registrationMode: 'open', registerInviteText: null, features: { stories: false } };
+  try {
+    out.registrationMode = await getRegistrationMode();
+    if (out.registrationMode === 'invite') out.registerInviteText = await renderSystemCommand('/sys_register_invite', REGISTER_INVITE_DEFAULT, {});
+    out.features.stories = await featureFlags.isOn('stories');
+  } catch (_) {}
+  res.json(out);
+});
+
 // ============================================
 // RUTAS DE AUTENTICACIÓN
 // ============================================
@@ -4131,6 +4206,9 @@ app.post('/api/auth/register', authLimiter, registerIpLimiter, async (req, res) 
     if (password.length < 6) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
     }
+
+    // #337: registro SÓLO CON INVITACIÓN (COMANDOS → Registro de clientes): sin código de referido válido ni campaña activa, no.
+    { const _inv = await _inviteOnlyBlocks(referralCode, campaignCode); if (_inv) return res.status(403).json({ error: _inv, code: 'INVITE_ONLY' }); }
     
     // SMS OBLIGATORIO en el auto-registro (owner 2026-08-05 — revierte la
     // decisión de #74). Este endpoint SOLO lo usa el registro público de la
@@ -5947,6 +6025,8 @@ app.post('/api/auth/send-register-otp', sensitiveLimiter, smsIpLimiter, async (r
     if (!phone || typeof phone !== 'string') {
       return res.status(400).json({ error: 'Número de teléfono requerido' });
     }
+    // #337: con el registro SÓLO CON INVITACIÓN no se manda el SMS si después el alta va a rebotar.
+    { const _inv = await _inviteOnlyBlocks(req.body.referralCode, req.body.campaignCode); if (_inv) return res.status(403).json({ error: _inv, code: 'INVITE_ONLY' }); }
 
     const normalizedPhone = phone.trim();
     if (!validateInternationalPhone(normalizedPhone)) {
@@ -11792,6 +11872,13 @@ async function initializeData() {
       description: 'Mensaje automático cuando el cliente elige CARGA MANUAL (con un agente por chat) y abre el chat para cargar (máx. 1 vez cada 2hs por cliente). Si lo dejás vacío, no se envía.',
       type: 'message',
       response: '💬 ¡Hola! Elegiste cargar con un agente.\n\nDecinos cuánto querés cargar y te pasamos los datos. Cuando transfieras, mandá la captura del comprobante acá mismo y te acreditamos. 📸'
+    },
+    {
+      // #337: aviso de "registro sólo con invitación" (pantalla de ingreso y respuesta del server)
+      name: '/sys_register_invite',
+      description: 'Registro SÓLO CON INVITACIÓN (COMANDOS → Registro de clientes): aviso que ve quien quiere registrarse sin código de referido ni link de publicidad.',
+      type: 'message',
+      response: REGISTER_INVITE_DEFAULT
     }
   ];
   for (const cmd of systemCmds) {
@@ -20832,6 +20919,7 @@ setTimeout(async () => {
 // Evaluar todas las reglas cada 5 min.
 async function _runNotifRulesEvaluator() {
   try {
+    if (!(await featureFlags.isOn('legacyNotifs'))) return; // #337: sistema anterior apagado desde COMANDOS
     const result = await notificationRulesService.evaluateAllRules({
       models: _notifRulesModels,
       sendPushFn: _notifRulesSendFn,
@@ -20863,6 +20951,7 @@ const EncuestaVote = require('./src/models/EncuestaVote');
 
 async function _runEncuestaTick() {
   try {
+    if (!(await featureFlags.isOn('legacyNotifs'))) return; // #337: sistema anterior apagado desde COMANDOS
     const cfg = mergeEncuestaConfig(await getConfig('encuestaPlanConfig'));
     const r = await encuestaService.tick({
       cfg: cfg,
