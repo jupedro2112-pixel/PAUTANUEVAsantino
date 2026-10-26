@@ -8,6 +8,55 @@
 
 ## Sesión 2026-10-26
 
+### 339. RÉPLICA DE PICA ROJA — tanda 3: 📽️ HISTORIAS manuales + 📖 automáticas (en OFF, interruptor en COMANDOS)
+- **Qué es:** historias estilo Instagram en la app: botón **"Historias"** en el header (antes del ☰, oculto hasta que la
+  función esté prendida), **anillo** en la pantalla de ingreso (historias públicas; lo dispara la respuesta de
+  `/api/config/access` del #337) y **visor** a pantalla completa (`#storyViewer`: barras, tocar derecha/izquierda,
+  mantener = pausa, reacciones 🔥❤️😂👍 una por cliente, toques al botón). Archivos nuevos (copiados del gemelo
+  CARGASGIROX #210, ya con marca CARGAS 1GIROX): `src/models/Story.js`, `src/services/storyAutopilot.js`,
+  `src/services/storyImage.js` (SVG 1080×1920 server-side, sin sharp/canvas; logo = `icons/icon-192x192.png`),
+  `public/js/stories.js`, `public/images/games/*.jpg` (10 fotos de slots).
+- **Manuales** (panel → Nuevo → "📽️ Historias", `#storiesSection`, solo admin general): imagen/video/texto, botón
+  (https, / o `app:cargar|retirar|ruleta|reembolso|referidos|verificar|soporte|instalar|vip|casino`), horas visibles,
+  repetir semanal, compositor "🎨 armar la foto" (canvas, `stMakeArt`) y **"⚡ Historia de bono en 1 toque"** (sólo % y
+  horas; la imagen la arma el server; push a todos). Funciones `loadAppStories/publishAppStory/extendAppStory/
+  toggleAppStory/deleteAppStory/saveAppStoriesConfig` (prefijo App porque `deleteStory` ya es de las historias de
+  INFLUENCERS). Rutas `GET/POST /api/admin/stories`, `POST …/config`, `PATCH/DELETE …/:id`.
+- **Automáticas** (panel → Notificaciones → "📖 Cronograma historias", `#cronohistSection`): `_storyAutoTick` cada 5 min
+  (arranca 2 min después del boot): 5 historias de SERVICIO por día a las 00:05–00:09 que rotan sin repetir las de ayer
+  (temas: cómo funciona, carga, retiros, reembolso, soporte, niveles VIP, referidos, juegos, deportes, instalar la app,
+  seguridad; el de "primera carga" sale sólo si el bono de 1ª carga está prendido en COMANDOS — `firstPct` de
+  `getFirstChargeBonusConfig()`), lunes el slot más jugado (catálogo público de 1girox), miércoles 19:00 el **bono
+  semanal +100 % por 3 h con push a todos**, partidos del día (ESPN público) sólo con la llave
+  `Config['storyAutoMatches']`. Las de ayer se apagan al salir las de hoy. `Story.autoKey` único ⇒ multi-instancia.
+  Diagnóstico en `Config['storyAutoDiag']`. Rutas `GET /api/admin/stories-autopilot`, `POST …/remove|republish-today|
+  matches`. Repetición semanal de las manuales: `_storiesRepeatTick` (1 h).
+- **Bono de la historia en la carga (adaptado al pipeline de ESTA repo):** `POST /api/stories/:id/claim-bonus` deja
+  `User.storyBonus {storyId,pct,label,claimedAt,expiresAt}` (bloqueados o con `fraudFlags` no pueden). Acá no existe
+  `_pendingBonusFor/_settlePendingBonuses` (lo del gemelo): la carga manual (`POST /api/admin/deposit`) y la automática
+  (`hgcashAutoCarga`) encadenan reservas atómicas, así que se sumó el mismo contrato: `claimStoryBonusPercent(userId,
+  by)` (reserva: `storyBonus.pct → 0`), `revertStoryBonus` (si la carga o el bono fallan) y `settleStoryBonus`
+  (contadores `bonusUses/bonusUsedTotal/bonusDepositTotal` de la Story + nota interna). **Prioridad: ruleta > bono de
+  1ª carga > HISTORIA > lote automático** (una carga = un solo bono automático; nunca en multicuenta bancaria). Monto
+  con el tope de un lote (`_loteBonusAmount` + tope global del bono de 1ª carga) y el rollover GLOBAL
+  (`_bonusMultiplierFor(null)`). Deja su Bonificación propia vía `_recordAppliedBonusTx` kind `story_bonus`
+  (`metadata.source 'story_bonus'`, `appliedOnDeposit:true` ⇒ fuera de la base del cashback). Etiqueta en
+  Transacciones: "📽️ historia". Si el agente carga con bonus a mano, el bono de historia NO se consume (sigue pendiente
+  hasta vencer) — distinto de la ruleta, que se marca usada.
+- **Push que abre la historia:** `sendNotificationToAllUsers(User, t, b, { url:'/?story=<id>', … })` → el SW
+  (`notificationclick`) ahora lee `data.url`: con la app abierta manda `{type:'vip-open', url}` (stories.js la abre), si
+  no abre esa URL. Sin URL sigue abriendo `/`. SW `v200`.
+- **Links `app:` en ESTA PWA:** cargar/retirar → `VIP.ui.casinoBotGo('deposit'|'withdraw')` (el asistente del casino;
+  acá no hay `depositModal`), ruleta → `VIP.ui.openRewardsHub()` (hub PREMIOS), casino/juegos/deportes →
+  `VIP.ui.enterCasino()`, instalar → `VIP.appTest.doInstall()`, reembolso → `VIP.refunds.showRefundModal('daily')`,
+  vip → `VIP.refunds.showProfileModal()`, referidos → `VIP.ui.openReferralModal()`. `app:play:<ruta>` abre el casino
+  con la sesión (no se puede abrir un juego puntual).
+- **Interruptor** `featureFlags.stories`: `_storiesGate` (404 `FEATURE_OFF`) en todas las rutas; `/api/stories/active`
+  responde `{items:[], off:true}` ⇒ la app esconde el botón; los crons salen sin hacer nada. Menú del panel con
+  `data-feature="stories"`. `User.storyBonus` nuevo. admin-sw `v79`. `node --check` + `check-tdz` OK.
+- **No se trajo:** bono de bienvenida por días (#886 allá, depende del Centro de avisos), las migraciones #845/#911/#931
+  (borraban historias al deployar) y todo lo de Render (`_STORY_IMG_BASE`).
+
 ### 338. RÉPLICA DE PICA ROJA — tanda 2: 🚨 ALERTAS DE ESTAFA y 🧠 DATOS IA 🔒 (ambas en OFF, interruptor en COMANDOS)
 - **Alertas de estafa** (`src/services/fraudRadar.js`, copiado 1:1 del gemelo CARGASGIROX #209 ← #873/#877/#952 de PICA
   ROJA): reglas que cruzan los datos (CBU de carga/retiro compartido, mismo celular por token de push o ID del celular,

@@ -7,7 +7,7 @@
 >
 > Última actualización: **2026-10-26** — réplica de PICA ROJA: tanda 1 interruptores de funciones
 > (`featureFlags`, §10), registro abierto / sólo con invitación, `GET /api/config/access` y sistema de
-> notificaciones anterior apagado (#337); tanda 2 Alertas de estafa + Datos IA (#338, §10.1). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
+> notificaciones anterior apagado (#337); tanda 2 Alertas de estafa + Datos IA (#338, §10.1); tanda 3 Historias (#339, §10.2). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
 > (`docs/replicas/`, `REPLICA-*.md`, `ESPEC-*.md`; #336). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
 > abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
 > "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
@@ -1225,3 +1225,23 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   `getDailyRouletteConfig` (instalar = 100 % fijo). `POST /api/activity/ping` (cualquier rol logueado) arma las
   sesiones y escribe `lastDevice`/`deviceIds`; apagado ⇒ `{ok:false, off:true}`. Cliente: `public/js/activity.js`
   (modo = `vip_deposit_mode`) + `window.VIP_DEVICE` (index.html).
+
+### 10.2 Historias (#339)
+
+- Modelo `Story` (`src/models/Story.js`; `autoKey` único sparse, `mediaData` y `autoImg` con `select:false`; vencen
+  por `expiresAt` pero quedan en el panel). `User.storyBonus`.
+- Rutas cliente: `GET /api/stories/public` (sin sesión), `GET /api/stories/active` (`off:true` si está apagado),
+  `POST /api/stories/:id/view|click|react`, `GET /api/stories/:id/auto.svg|media`, `POST /api/stories/:id/claim-bonus`,
+  `GET /api/stories/bonus`. Admin: `/api/admin/stories*`, `/api/admin/stories-autopilot*` (admin general). Gate `_storiesGate`.
+- Motor: `_storyAutoTick` (5 min), `_storiesRepeatTick` (1 h); plan del día = `storyAuto.planDay(dayKey, matches, ctx)`
+  (`ctx.firstPct` = bono de 1ª carga si está prendido); fotos = `storyImage.renderSvg(spec)` servidas en `/auto.svg`
+  (CSP estricta). `STORY_IMG_VER` fuerza rearmar las fotos. Config: `storiesConfig`, `storyAutoMatches`,
+  `storyGamesSnapshot`, `storyAutoDiag`.
+- **Bono de historia en la carga:** `claimStoryBonusPercent` / `revertStoryBonus` / `settleStoryBonus` encadenados en
+  `POST /api/admin/deposit` y en `hgcashAutoCarga` con la prioridad ruleta > 1ª carga > historia > lote (Transaction
+  'bonus' con `metadata.source 'story_bonus'` vía `_recordAppliedBonusTx`). Un flujo de carga nuevo tiene que repetir
+  la cadena (acá no hay un `_settlePendingBonuses` central).
+- PWA: `public/js/stories.js` (`VIP.stories = {init, load, loadPublic, open, openById, claimBonus, close, …}`), botón
+  `#navHistorias` (header), anillo `#lgStoriesRing` (ingreso, lo dispara `auth.js` con `features.stories` de
+  `/api/config/access`), visor `#storyViewer`; CSS en `chat.css` y `login.css`. El SW reenvía `data.url` de la push
+  (`vip-open`) y abre esa URL si la app está cerrada.

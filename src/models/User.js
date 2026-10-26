@@ -645,6 +645,9 @@ const userSchema = new mongoose.Schema({
   fraudFlags: { type: [String], default: [] },
   fraudNotes: { type: [{ at: Date, note: String }], default: [] },
   fraudReview: { status: { type: String, default: null }, by: { type: String, default: null }, at: { type: Date, default: null }, note: { type: String, default: null } },
+  // #339 HISTORIA CON BONO (réplica #742 de PICA ROJA): +pct% reclamado desde una historia, se aplica en la PRÓXIMA carga
+  // (server: claimStoryBonusPercent en la carga manual y hgcash) mientras no venza (expiresAt = fin del bono de la historia).
+  storyBonus: { storyId: { type: String, default: null }, pct: { type: Number, default: 0 }, label: { type: String, default: null }, claimedAt: { type: Date, default: null }, expiresAt: { type: Date, default: null } },
   dailyRoulettePendingPct: { type: Number, default: 0 },
   dailyRoulettePendingLabel: { type: String, default: null },
 

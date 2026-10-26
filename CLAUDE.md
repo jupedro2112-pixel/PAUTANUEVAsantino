@@ -183,6 +183,9 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   / no-op). `legacyNotifs` apaga el sistema automático anterior (reglas, encuesta, estrategia programada); lo
   manual no depende de él. Registro: `Config['registrationMode']` `open` (default) | `invite`
   (`_inviteOnlyBlocks` en register + OTP). `GET /api/config/access` es público y la PWA lo pide al arrancar.
+  **Historias (#339):** el bono "+X% en tu próxima carga" se aplica en la carga con `claimStoryBonusPercent` /
+  `revertStoryBonus` / `settleStoryBonus` (prioridad ruleta > 1ª carga > historia > lote); un flujo de carga nuevo
+  tiene que repetir esa cadena. El SW honra `data.url` de las pushes (`vip-open`).
 
 ## Flujo de trabajo del asistente
 

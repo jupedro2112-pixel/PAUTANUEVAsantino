@@ -32,6 +32,8 @@ VIP.auth = (function () {
                 if (!j) return;
                 _accessConfig = j;
                 _applyRegistrationMode(j);
+                // #339: historias públicas en la pantalla de ingreso (sólo con la función prendida). stories.js carga después de auth.js.
+                try { if (j.features && j.features.stories) { const go = function () { try { if (VIP.stories && VIP.stories.loadPublic) VIP.stories.loadPublic('lgStoriesRing'); } catch (_) {} }; if (VIP.stories) go(); else setTimeout(go, 1500); } } catch (_) {}
                 try { document.dispatchEvent(new CustomEvent('vip:access-config', { detail: j })); } catch (_) {}
             }).catch(function () {});
     } catch (_) {}
