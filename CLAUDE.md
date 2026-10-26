@@ -186,6 +186,9 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   **Historias (#339):** el bono "+X% en tu próxima carga" se aplica en la carga con `claimStoryBonusPercent` /
   `revertStoryBonus` / `settleStoryBonus` (prioridad ruleta > 1ª carga > historia > lote); un flujo de carga nuevo
   tiene que repetir esa cadena. El SW honra `data.url` de las pushes (`vip-open`).
+  **Centro de avisos / piloto (#340):** toda push automática nueva lleva `data.kind` ('promo' | 'personal'; sin kind =
+  del sistema) para respetar `User.notifPrefs`; un lote que arme un motor pasa por `_createNotifBatchFromBody` con
+  `dailyCap:1` + `monthlyCap` (el wrapper de audiencia los aplica). Crons nuevos multi-instancia: `_cronClaim(name, ttl)`.
 
 ## Flujo de trabajo del asistente
 

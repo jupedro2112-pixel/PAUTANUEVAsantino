@@ -7,7 +7,7 @@
 >
 > Última actualización: **2026-10-26** — réplica de PICA ROJA: tanda 1 interruptores de funciones
 > (`featureFlags`, §10), registro abierto / sólo con invitación, `GET /api/config/access` y sistema de
-> notificaciones anterior apagado (#337); tanda 2 Alertas de estafa + Datos IA (#338, §10.1); tanda 3 Historias (#339, §10.2). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
+> notificaciones anterior apagado (#337); tanda 2 Alertas de estafa + Datos IA (#338, §10.1); tanda 3 Historias (#339, §10.2); tanda 4 Centro de avisos + piloto automático (#340, §10.3). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
 > (`docs/replicas/`, `REPLICA-*.md`, `ESPEC-*.md`; #336). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
 > abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
 > "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
@@ -1245,3 +1245,19 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   `#navHistorias` (header), anillo `#lgStoriesRing` (ingreso, lo dispara `auth.js` con `features.stories` de
   `/api/config/access`), visor `#storyViewer`; CSS en `chat.css` y `login.css`. El SW reenvía `data.url` de la push
   (`vip-open`) y abre esa URL si la app está cerrada.
+
+### 10.3 Centro de avisos y piloto automático (#340)
+
+- **Audiencia de lotes:** `_resolveNotifBatchAudience` = wrapper (`appOnly`, `monthlyCap`, `dailyCap`, `rotGroup`) sobre
+  `_resolveNotifBatchAudienceBase`. `NotifBatch.giftType 'none'` = sólo aviso (ya existía, #264). Preferencias: `User.notifPrefs`
+  (`prefsFilter` en notificationService; `sendPushIfOffline` mira `data.kind`). Fatiga ⇒ `/api/activity/ping` la resetea.
+- **Recorrido:** `retentionJourney.{classify,pickStep,render,batchBody}`; motor `_journeyScan`/`_journeyTick`; panel
+  `/api/admin/notif-center` (GET/PUT/run). Config `notifCenter {monthlyCap, journey, refundReminder}`, `journeyTuning`, `journeyLast`.
+- **Avisos del reembolso:** `_refundRemindPlan/_refundRemindRun/_refundReminderTick` (periodKey igual al del reclamo:
+  `daily:YYYY-MM-DD`, `weekly:<lunes>`, `monthly:YYYY-MM`). Push `url:'/?open=refund'` ⇒ `app.js` abre Reembolso.
+- **Revisión semanal:** `_weeklyMetrics` (regalado/depositado desde `Transaction`, sin `DailyClose`) + `weeklyReview.decide` ⇒
+  `journeyTuning`; informe en `Config['weeklyReview']`; rutas `/api/admin/weekly-review` (+`/run`).
+- **Piloto:** `getAutopilotConfig` (fijo: 19:00, 4 h, 3 tandas/30 min, tope 8 o el del Centro), `_autopilotMonthItems(Raw)`,
+  `_autopilotProgramMonth`, `_autopilotClearFuture`, `_autopilotTick`; ruta `/api/admin/cronograma-autopilot`. Las campañas
+  las ejecuta `_schedTick` como cualquier otra (`payload` → `_createNotifBatchFromBody`).
+- Locks multi-instancia: `_cronClaim(name, ttl)` sobre `Config['cronlock_<name>']` (fail-open).

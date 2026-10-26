@@ -287,6 +287,11 @@ const userSchema = new mongoose.Schema({
   // últimos 6 IDs propios del celular (los manda /api/activity/ping; las Alertas de estafa cruzan cuentas por ellos).
   lastDevice: { type: mongoose.Schema.Types.Mixed, default: null },
   deviceIds: { type: [String], default: [], index: true },
+  // #340 CENTRO DE AVISOS (réplica #971 de PICA ROJA): qué avisos quiere el cliente ('all' | 'mine' | 'none'; Perfil) y la
+  // "fatiga" (promos seguidas sin abrir la app; 10 ⇒ se pausan las masivas hasta que entre; la resetea /api/activity/ping).
+  notifPrefs: { level: { type: String, default: 'all' }, updatedAt: { type: Date, default: null }, fatigue: { type: Number, default: 0 } },
+  // #340 RECORRIDO DE RETENCIÓN: pasos ya enviados ("<paso>@<episodio>"), último paso y segmento. Lo escribe sólo _journeyTick.
+  journey: { segment: { type: String, default: null }, lastStep: { type: String, default: null }, lastAt: { type: Date, default: null }, sent: { type: [{ k: String, at: Date }], default: [] } },
   // Último permiso de notificaciones reportado por el cliente: 'granted' / 'denied' / 'default'
   notifPermission: {
     type: String,
