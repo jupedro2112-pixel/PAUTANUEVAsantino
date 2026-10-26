@@ -8,6 +8,43 @@
 
 ## Sesión 2026-10-26
 
+### 338. RÉPLICA DE PICA ROJA — tanda 2: 🚨 ALERTAS DE ESTAFA y 🧠 DATOS IA 🔒 (ambas en OFF, interruptor en COMANDOS)
+- **Alertas de estafa** (`src/services/fraudRadar.js`, copiado 1:1 del gemelo CARGASGIROX #209 ← #873/#877/#952 de PICA
+  ROJA): reglas que cruzan los datos (CBU de carga/retiro compartido, mismo celular por token de push o ID del celular,
+  mismo número de teléfono, terceros que cargan, retiro a nombre de otro, abuso de bonos, retiro casi sin jugar, cuenta
+  nueva con retiro grande, ciclo carga→retiro, granja de referidos, marcas previas, sin teléfono) y suman PUNTAJE (60+
+  alto, 30–59 medio) con la evidencia. **Nada se bloquea solo.** Rutas `GET /api/admin/fraud/alerts?days=&fresh=` (cache
+  5 min; las stats de juego salen de `girox.getPlayersStatsBatch`, sólo para quienes pidieron retirar, máx. 100),
+  `GET /api/admin/fraud/case/:id` (caso completo), `POST /api/admin/fraud/review/:id` (legit/watch/clear →
+  `User.fraudReview` + `fraudNotes`). Bloquear usa el `/api/admin/users/:id/block` de siempre. **Solo admin general**
+  (`_fraudGate`) y `featureFlags.fraudRadar` (apagado ⇒ 404 `FEATURE_OFF`). Sin crons. Panel: menú "🚨 Alertas de
+  estafa" (`data-feature="fraudRadar"`, oculto si está OFF), sección `#fraudSection`, caso en `#frCaseModal`.
+- **Datos IA** (`src/services/datosIaService.js` + modelos `AppSession` y `DatosIaSnapshot`, copiados 1:1; **no usa
+  IA**: son agregaciones de Mongo). Pestañas Panorama (inversión y proyección con calibración), Cierre de ayer (base
+  retenida), Análisis por fechas (KPIs, informe con semáforos, escalera post 1ª carga, serie, gasto en pauta),
+  Comparativa con "la otra página" (números a mano) e Historial (revisar proyecciones contra lo real). Rutas bajo
+  `/api/admin/datos-ia/*` con un `app.use` que exige: función prendida (`featureFlags.datosIa`) → admin general →
+  **clave propia** si está cargada (`Config['datosIaPinHash']` sha256, header `x-datos-pin`, 423 `PIN_REQUIRED`; 6
+  fallos ⇒ 15 min 429). Clave en COMANDOS → "🔒 Clave de Datos IA" (`/api/admin/datos-ia-pin`). Cotización USDT manual
+  o de criptoya (público, sin clave).
+- **`_diaPromoConfig` adaptado a ESTA página** (cada fuente en su try/catch): bono de 1ª carga = `getFirstChargeBonusConfig()`
+  (`percent` si `enabled`, tope `capArs` + `restPct`); bono automático por carga = 0 (los lotes son por período/audiencia,
+  no una regla global); extra por instalar = 100 % de la próxima carga (fijo acá; el gemelo tenía `getInstallBonusConfig`,
+  que no existe en esta repo); reembolsos = % más alto de cada escalera de `getRefundTiersByPeriod()`; ruleta diaria =
+  % extra promedio por giro de `getDailyRouletteConfig()`.
+- **Medidor de uso de la app**: `public/js/activity.js` pinguea `POST /api/activity/ping` cada 60 s con la app visible
+  (sesión nueva si pasan >3 min) + `window.VIP_DEVICE` (modelo/OS/pantalla, bloque inline en index.html) + ID propio
+  del celular (`localStorage.vip_device_id`) → `User.lastDevice` y `User.deviceIds` (últimos 6), que también cruzan
+  las Alertas de estafa. Con Datos IA apagado el server responde `{ok:false, off:true}` y la app deja de pinguear en
+  esa sesión. El "modo" que viaja en el ping es el modo de carga (`localStorage.vip_deposit_mode`: auto/manual) — acá
+  no hay "modo del menú" como en PICA ROJA.
+- `User`: + `lastDevice`, `deviceIds` (index), `fraudFlags`, `fraudNotes`, `fraudReview`. Panel: `admin.css` suma las
+  78 reglas `.dia` con las variables `--p-*` mapeadas al tema oscuro de acá; `authFetch` agrega `x-datos-pin` a
+  `/api/admin/datos-ia/`; `datosIaGate` pide la clave una vez por sesión (sessionStorage `datos_pin`);
+  `_featureOnOrToast` avisa si se entra a una sección apagada. SW `v199`, admin-sw `v78`. `node --check` + `check-tdz` OK.
+- **No se trajo** a propósito: la sección INICIO de PICA ROJA, "clave para Datos/Datos 2.0/Cierres" (#743 allá) y
+  `STAFF_DENY_MUTATIONS` (acá se resolvió con admin-only en las rutas nuevas).
+
 ### 337. RÉPLICA DE PICA ROJA (PICAROJA30) — tanda 1: interruptores en COMANDOS, registro abierto / sólo con invitación, sistema de notificaciones anterior APAGADO y al fondo del menú
 - **Owner:** replicar de `PICAROJA30` seis cosas (Datos IA, Centro de avisos, Alertas de estafa, notificaciones
   programadas nuevas, registro activado/desactivado, historias), **todo en OFF** salvo el registro (ON = abierto) y

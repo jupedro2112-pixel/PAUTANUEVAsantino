@@ -5,9 +5,9 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-10-26** — réplica de PICA ROJA tanda 1: interruptores de funciones
+> Última actualización: **2026-10-26** — réplica de PICA ROJA: tanda 1 interruptores de funciones
 > (`featureFlags`, §10), registro abierto / sólo con invitación, `GET /api/config/access` y sistema de
-> notificaciones anterior apagado (#337). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
+> notificaciones anterior apagado (#337); tanda 2 Alertas de estafa + Datos IA (#338, §10.1). Antes: 2026-10-19 — se eliminaron los docs de réplica/espec entre repos
 > (`docs/replicas/`, `REPLICA-*.md`, `ESPEC-*.md`; #336). Antes: 2026-10-17 — card "¿Tenés un código de regalo?" en PREMIOS que
 > abre el modal de canje por encima del casino (#332, §9 junto al #330). Ese mismo día: filtro
 > "solo Argentina" de la landing movido a Vercel (`landing/vercel.json`, #331); el middleware de
@@ -1210,3 +1210,18 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   campaña activa. Aviso `/sys_register_invite`. **`GET /api/config/access`** (público, `no-store`) publica
   `registrationMode`, `registerInviteText` y `features.stories`; `auth.js` lo pide al cargar, pone `body.reg-invite`
   y dispara `document` → `vip:access-config` (detail = la respuesta) para los módulos que arrancan después.
+
+### 10.1 Alertas de estafa y Datos IA (#338)
+
+- **Alertas de estafa:** `src/services/fraudRadar.js` (`scan(deps,{days})`, `caseFile(deps,userId)`, `RULES`). Rutas
+  `/api/admin/fraud/alerts|case/:id|review/:id`, gate `_fraudGate` (flag `fraudRadar` + admin general). Campos de
+  `User`: `fraudFlags`, `fraudNotes`, `fraudReview{status legit|watch|null,by,at,note}`, `lastDevice`, `deviceIds`.
+  Un cliente `legit` no vuelve a aparecer. Usa `PendingPayout`, `BankMovement`, `Transaction` y las stats batch de 1girox.
+- **Datos IA:** `src/services/datosIaService.js` (`analyze`, `compare`, `project`, `review`, `dailyRetained`,
+  `dayTotals`, `dateKeyART`; cache 5 min por proceso), modelos `AppSession` (TTL 180 d) y `DatosIaSnapshot` (TTL 2 años).
+  `app.use('/api/admin/datos-ia')` = flag `datosIa` → admin general → clave (`Config['datosIaPinHash']`, header
+  `x-datos-pin`, 423/429). Config: `datosIaPinHash`, `usdtRate`, `adSpend`, `adSpendTotal`, `otherPageStats`,
+  `projectionCalibration`. `_diaPromoConfig` lee `getFirstChargeBonusConfig`, `getRefundTiersByPeriod` y
+  `getDailyRouletteConfig` (instalar = 100 % fijo). `POST /api/activity/ping` (cualquier rol logueado) arma las
+  sesiones y escribe `lastDevice`/`deviceIds`; apagado ⇒ `{ok:false, off:true}`. Cliente: `public/js/activity.js`
+  (modo = `vip_deposit_mode`) + `window.VIP_DEVICE` (index.html).
