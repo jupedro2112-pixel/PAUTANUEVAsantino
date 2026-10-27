@@ -1721,9 +1721,13 @@ VIP.ui._showCasinoFrame = function() {
           '<button type="button" id="casinoThemeBtn" onclick="VIP.ui.casinoToggleTheme()" title="Modo claro/oscuro" ' +
             'style="background:rgba(255,255,255,0.18);color:#fff;border:none;border-radius:50%;' +
             'width:28px;height:28px;font-size:14px;cursor:pointer;flex:0 0 auto;">🌙</button>' +
-          '<button type="button" onclick="VIP.ui.toggleCasinoChat()" title="Cerrar" ' +
-            'style="background:rgba(255,255,255,0.18);color:#fff;border:none;border-radius:50%;' +
-            'width:28px;height:28px;font-size:14px;cursor:pointer;flex:0 0 auto;">✕</button>' +
+          // #343: la ✕ ROJA y sólida (antes translúcida de 28px): con el panel a
+          // pantalla completa nadie la veía y la gente se quedaba en el chat
+          // "sin salida" — cerrarlo es la única forma de ver el casino atrás.
+          '<button type="button" id="casinoCloseBtn" onclick="VIP.ui.toggleCasinoChat()" title="Cerrar y ver el casino" ' +
+            'style="background:#e53935;color:#fff;border:2px solid rgba(255,255,255,0.85);border-radius:50%;' +
+            'width:32px;height:32px;font-size:16px;font-weight:900;line-height:1;cursor:pointer;flex:0 0 auto;' +
+            'box-shadow:0 2px 8px rgba(0,0,0,0.35);">✕</button>' +
         '</div>' +
         // FILA FIJA de opciones (siempre a la vista, owner 2026-08-21 ref
         // Bet33): las 3 acciones ancladas bajo el header.
@@ -1776,7 +1780,7 @@ VIP.ui._showCasinoFrame = function() {
         // Barrita inferior mínima. SIN "Salir del casino" ni "Casino aparte"
         // (owner 2026-08-21) — el abrir-aparte queda solo en el recuadro de
         // error del casino (openCasinoInTab sigue existiendo para eso).
-        '<div class="cwFoot" style="flex:0 0 auto;display:flex;gap:14px;justify-content:center;padding:4px;">' +
+        '<div class="cwFoot" style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;padding:4px;">' +
           '<button type="button" class="cwGrn" onclick="VIP.ui.casinoBotGo(\'home\')" style="background:none;border:none;' +
           'font-size:10.5px;cursor:pointer;font-weight:700;">🤖 Asistente</button>' +
           // #290: los datos de ingreso SIEMPRE a mano (antes solo salían al inicio
@@ -1786,6 +1790,9 @@ VIP.ui._showCasinoFrame = function() {
           // #318: Mis referidos SIEMPRE a mano (el banner del inicio desaparece al ir a depositar).
           '<button type="button" class="cwGrn" onclick="VIP.ui.openReferralModal()" style="background:none;border:none;' +
           'font-size:10.5px;cursor:pointer;font-weight:700;">🤝 Mis referidos</button>' +
+          // #343: salida SIEMPRE a mano también abajo (mismo cierre que la ✕).
+          '<button type="button" onclick="VIP.ui.toggleCasinoChat()" style="background:none;border:none;color:#e53935;' +
+          'font-size:10.5px;cursor:pointer;font-weight:800;">🎰 Cerrar y jugar</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -2118,7 +2125,7 @@ VIP.ui._showDrawerResizeHintOnce = function() {
     if (!overlay || !drawer || drawer.style.display === 'none') return;
     const r = drawer.getBoundingClientRect();
     const hint = document.createElement('div');
-    hint.textContent = '↕ Podés agrandar o achicar este panel: arrastrá la barrita verde de arriba o tocá ⤢';
+    hint.textContent = '↕ Podés agrandar o achicar este panel (barrita de arriba o ⤢). Con la ✕ roja lo cerrás y ves el casino.';
     hint.style.cssText =
       'position:absolute;max-width:260px;background:rgba(13,13,26,0.95);color:#ffd700;' +
       'border:1px solid rgba(212,175,55,0.6);border-radius:12px;padding:9px 12px;' +
