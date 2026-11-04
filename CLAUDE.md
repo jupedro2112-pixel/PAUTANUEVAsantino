@@ -80,10 +80,24 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
 
 ## Cosas que NO hay que romper (gotchas)
 
+- **Página del casino (#346):** se cambia en COMANDOS → `/sys_casino_url` (vacío = 1girox.com). El SSO sigue: `createSession`
+  re-apunta el dominio del `redirect_url` (`applyPlayDomain`) y el CSP suma ese dominio (`_setCasinoFrameOrigin`). Usar
+  `girox.getPlayUrl()`, nunca "https://1girox.com" fijo en código nuevo. Test: `node scripts/test-casino-url.js`.
+
 - **Credenciales de hgcash (#320):** además de SSM, se pueden cargar desde el panel (cifradas
   en Config con clave derivada de JWT_SECRET; panel > SSM). Cambio de cuenta hgcash = panel →
   Banco automático, sin tocar AWS. No volver a leer `process.env.HGCASH_API_TOKEN` directo:
   usar `hgcashPay.getToken()` y `_hgcashWebhookSecrets()`.
+- **Cuentas hgcash (hasta 3, #347 — réplica #223/#223b de CARGASGIROXactivo):** hasta 3 cuentas cargadas desde el
+  panel (cifradas en `Config['hgcashAccounts']` con clave derivada de JWT_SECRET; panel > SSM; lo de una sola cuenta de antes se
+  migra solo a `a1`) y UNA activa que se rota con el botón "USAR ESTA" (card "🏦 Cuentas hgcash" de Comandos → Banco automático;
+  la pueden tocar admin/depositor/withdrawer). La activa paga y es lo que ve el cliente (al activar se reescribe `Config['cbu']`);
+  **las cargas entran por TODAS** (el webhook acepta cualquiera de los secretos y etiqueta `BankMovement.accountKey`) salvo que el
+  panel diga "solo la en uso" o pause una cuenta (`incomingMode` / `incomingEnabled` → `_hgAccountReceives`; lo pausado queda pendiente en Movimientos del banco,
+  no se carga solo — todo matcheo automático nuevo tiene que respetar `_hgMovementAutoOff(m)`). Un pago recuerda su cuenta
+  (`hgAccountKey`): toda consulta nueva a hgcash sobre un pago existente tiene que pasar `_hgTokenFor(x.hgAccountKey)`, y todo
+  flujo nuevo que pague tiene que guardar `hgAccountKey: _hgActiveKey`. No volver a leer `process.env.HGCASH_API_TOKEN` directo:
+  usar `hgcashPay.getToken()` / `_hgcashWebhookSecretEntries()`.
 - **JWT_SECRET y otros secrets** se cargan desde AWS SSM en el bootstrap async, NO al
   `require()`. Por eso hay lazy getters en `src/middlewares/auth.js` y rutas.
 - **IDEMPOTENCIA POR `reference` (lo más importante de la plataforma nueva).** Cargas,
