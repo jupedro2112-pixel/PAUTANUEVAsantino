@@ -69,6 +69,13 @@ const comprobanteSchema = new mongoose.Schema({
   },
   matchedMovementId: { type: String, default: null }, // movementId de BankMovement matcheado
   autoCharged: { type: Boolean, default: false },
+  // #349 Finpro: estado de la verificación `transfers/verify/incoming` hecha a partir de este
+  // comprobante. 'pending' = Finpro todavía no la ve acreditada y el cron `_finproReverifyTick`
+  // la vuelve a consultar (`finproVerify.nextAt`), hasta 90 min → 'gave_up'. 'confirmed' |
+  // 'ambiguous' | 'error' | 'resolved' (se cargó/resolvió por otro camino). null = nunca se verificó.
+  finproVerifyStatus: { type: String, default: null, index: true },
+  // Detalle para el diagnóstico del panel: { startedAt, attempts, lastAt, nextAt, last, log[≤10], movementId }.
+  finproVerify: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Resolución MANUAL del agente (banner Aceptar/Rechazar del panel, 2026-08-21):
   // para cuando la carga automática no tomó el comprobante (hgcash caído o

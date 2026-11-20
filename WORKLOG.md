@@ -4,7 +4,49 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-10-29**
+> **Última actualización: 2026-11-20**
+
+## Sesión 2026-11-20
+
+### 349. Finpro como segundo banco con API (hasta 3 cuentas) + "Bancos automáticos" + rotación automática + pagar con el otro banco (réplica #202–#216 de AUTOREEMBOLSOSjygactivo) — admin-sw v85
+- **Owner:** replicar acá "tal cual quedó" todo lo de BANCOS de AUTOREEMBOLSOSjygactivo. Este repo ya tenía las 3 cuentas hgcash (#347) y la
+  sección Bancos — Configuración (#348); faltaba Finpro entero y todo lo posterior.
+- **Finpro (fuente #202):** `src/services/finproService.js` (nuevo, copia de la fuente). En `server.js`: cuentas `Config['finproAccounts']`
+  (hasta 3, cifradas, panel > SSM, una EN USO), webhook entrante `POST /api/finpro/webhook` y callback de pagos `POST /api/finpro/callback`
+  (firmados), ingesta a `BankMovement` (`provider:'finpro'`, `accountKey 'f1'…`), verificación del comprobante contra Finpro
+  (`_finproVerifyComprobante` + re-verificación cada 2 min hasta 90 min), pago de retiros (`_payPayoutViaFinpro`, `_finproSyncPayout`),
+  diagnóstico, saldos y verificación manual. Las cargas usan el MISMO `hgcashAutoCarga` (misma plata: `girox.depositToUser`, misma
+  `reference vip-hg-<coelsa>`, mismos candados y bonos): **no se tocó el camino de plata**.
+- **"🏦 Bancos automáticos" (3 llaves):** por dónde entran las cargas (hgcash / Finpro / los dos / ninguno), por dónde salen los retiros
+  (`Config['bankProvider']`) y qué cuenta ve el cliente (`Config['bankShown']`: hgcash / finpro / manual). Sin tocar nada queda como antes
+  (todo por hgcash).
+- **Rotación automática (fuente #207, #210, #213, #216):** `Config['bankRotation']`, apagada por defecto. Por caída o por tope día/mes, destino
+  elegible por cuenta, otro banco opcional (y los retiros), vueltas cuando todas llegan al tope del día, candado de 5 min. Nota interna en el
+  chat cuando el cliente transfirió a una cuenta que no es la que está en uso.
+- **Barra única (fuente #208):** `GET/POST /api/admin/bank-in-use`. Acá no hay sección 🏦 Banco: la barra quedó arriba de Bancos — Configuración
+  (solo admin general, como el resto de esa sección).
+- **Retiros (fuente #213/#214):** `POST /api/admin/payouts/:id/pay` acepta `body.provider` (pagar ESE retiro con el otro banco) y
+  `confirmOtherBank`; botones del chat: Pagar / Pagar nuevamente · Pagar con otro banco · Ya lo pagué por fuera. Un estado de un banco no
+  toca un pago que salió por el otro; un ERROR tardío solo actúa sobre `paying`; DONE cruzado → nota "POSIBLE PAGO DOBLE".
+- **CBU/alias obligatorios (fuente #212):** una cuenta hgcash o Finpro no se guarda sin CBU/CVU de 22 dígitos y alias; al rotar, el cliente
+  nunca hereda banco/alias de la cuenta anterior. ⚠️ Una cuenta hgcash ya guardada SIN CBU o alias sigue funcionando, pero para editarla hay
+  que completarlos.
+- **Modelos:** `BankMovement` (+`provider`, `processedEvents`, `fromKey`, `resolutionNote`, `outKind`, `payoutId`), `Comprobante`
+  (+`finproVerifyStatus`, `finproVerify`), `PendingPayout` (+`fpProcessId`, `fpTransactionId`, `fpCoelsaId`, `fpAccepted`, `fpAccountKey`,
+  `hgSendUnknown`). Solo campos nuevos con default: lo guardado no cambia.
+- **Panel:** `index.html` — la sección Bancos — Configuración quedó como la de la fuente (cards Bancos automáticos, Rotación, Finpro, filtro por
+  banco en Movimientos). **Arreglo de paso:** el bloque de hgcash había quedado DUPLICADO en COMANDOS (el #348 lo copió sin sacarlo → ids
+  repetidos: `getElementById` llenaba la copia de COMANDOS y la de Bancos quedaba vacía); se sacó la copia de COMANDOS, igual que hizo la
+  fuente. `admin.js` — `loadBanks`/`saveBanks`, bloque Finpro, rotación, barra única, banner del retiro, etiqueta violeta de Finpro en los
+  movimientos. Todo exportado en `window.*`.
+- **Adaptado distinto a la fuente (este repo no lo tiene):** sin `plat.*` (va `girox` como siempre); sin Telegram (los avisos de rotación y de
+  posible pago doble quedan en el log + nota interna + "Últimos cambios"); sin bandeja / cierre diario / bajadas; sin el chequeo de
+  "comprobante a CBU ajeno". Propio de acá: verificación de Finpro pendiente → el chat va igual a ABIERTOS al toque; ambigua → `_finproAmbiguousToOpen`.
+- **Pendiente del owner tras el deploy:** cargar las cuentas Finpro en el panel (API key/secret, CVU, alias, secreto del webhook), pedirle a
+  Finpro el alta del webhook a `/api/finpro/webhook`, y recién ahí elegir en "Bancos automáticos" por dónde entra/sale. Probar primero en SOMBRA.
+- Validado: `node --check` (server.js, admin.js, admin-sw, modelos, finproService, tests), `check-tdz`, `test-finpro-accounts` (43/43),
+  `test-finpro-webhook` (17), `test-bank-rotation` (19), `test-casino-url` (13). No se pudo levantar el server (sin node_modules): nada probado
+  contra Finpro real ni en navegador. Docs: ARCHITECTURE §11, CLAUDE.md (gotcha de dos bancos).
 
 ## Sesión 2026-11-04
 
