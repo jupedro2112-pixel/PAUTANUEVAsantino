@@ -1390,3 +1390,9 @@ Bancos — Configuración (no hay sección 🏦 Banco).
 - Tests: `node scripts/test-finpro-accounts.js`, `node scripts/test-finpro-webhook.js`, `node scripts/test-bank-rotation.js` (recortan bloques
   reales de server.js por marcadores: `const FINPRO_DEFAULTS`, `async function _banksPayload`, `const _finproLastProcessByCvu`,
   `async function handlePayoutStatusWebhook(p, provider)`).
+
+### Cuenta en uso: cambio manual y registro (#350)
+Cualquier rol del panel menos `comunidad` cambia la cuenta que ve el cliente con el botón fijo "🏦" (`bankQuickChip`, `admin.js`) →
+`POST /api/admin/bank-in-use` (`_bankCanSwitch`). Todo cambio MANUAL (ese botón, la barra, o "USAR ESTA" en las cards de hgcash/Finpro)
+queda en `Config['bankSwitchLog']` vía `_bankSwitchLog` (quién, rol, hora, de cuál a cuál); se lee con `GET /api/admin/bank-in-use/log`.
+Un camino nuevo que cambie la cuenta en uso a mano tiene que llamar a `_bankSwitchLog`.
