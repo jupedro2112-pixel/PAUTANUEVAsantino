@@ -110,6 +110,19 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   Rotación automática de cuentas (`Config['bankRotation']`, apagada por defecto; sin Telegram acá: queda en el log y en la card) y barra única
   de cuentas (`/api/admin/bank-in-use`, arriba de Bancos — Configuración). Las credenciales NO van en el repo. Detalle en
   `docs/ARCHITECTURE.md` §11. Tests: `node scripts/test-finpro-accounts.js`, `test-finpro-webhook.js`, `test-bank-rotation.js`.
+- **Pagos de retiros: candado anti pago doble (#351, réplica #219 de AUTOREEMBOLSOSjygactivo — incidente 2026-11-20 de $2,4M en aquel
+  proyecto):** la idempotencia del banco solo vale dentro de UNA cuenta. Todo camino que mande un retiro llama a `_payoutResendGuard(...)`
+  antes de reclamarlo, `_payoutNoteSend(...)` justo antes del POST al banco y `_payoutNoteResult(...)` con la respuesta. En hgcash el token
+  va EXPLÍCITO (`createCashOut({ token })`, cuenta fijada al empezar el pedido), nunca el global de "la cuenta en uso". No aflojar la espera
+  de 2 minutos ni dar por "rechazado" un envío sin respuesta clara. Test: `node scripts/test-payout-guard.js`.
+- **Salientes del banco SIEMPRE vinculados (#352):** una salida que el banco informa sin vínculo a un retiro (`BankMovement.outKind:'unknown'`;
+  el webhook de hgcash clasifica los salientes por `externalID` desde el #352) dispara `_alertUnknownOutbound` ("POSIBLE PAGO DOBLE" /
+  "PAGADO POR FUERA" en el chat si coincide monto + CBU con un retiro; **sin Telegram acá**: si no coincide con ningún retiro queda solo en
+  el log `[bank-out-externo]`). Todo flujo nuevo que saque plata del banco tiene que mandar su `externalID` / dejar `payoutId`, o va a
+  alertar en falso. Un pago confirmado por Finpro manda `maybeSendFinproReceipt` (comprobante en texto con COELSA, `/sys_payout_receipt_finpro`).
+- **Retiro "VERIFICANDO" (#353):** un envío a hgcash sin respuesta clara deja el retiro `failed` + `hgSendUnknown` + `verifyUntil` (3 min):
+  el pago pudo haber salido. Toda ruta que pague, marque pagado, rechace o descarte un `PendingPayout` llama a `_payoutVerifyBlock(payout)`
+  primero. El cartel del chat (`?status=chat`) muestra también EN PROCESO y FALLADO: no volver a esconderlos.
 - **JWT_SECRET y otros secrets** se cargan desde AWS SSM en el bootstrap async, NO al
   `require()`. Por eso hay lazy getters en `src/middlewares/auth.js` y rutas.
 - **IDEMPOTENCIA POR `reference` (lo más importante de la plataforma nueva).** Cargas,

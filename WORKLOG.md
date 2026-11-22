@@ -4,7 +4,80 @@
 > commit por commit está en `git log --oneline`. Esto captura decisiones, umbrales de
 > negocio y pendientes que NO se ven leyendo el código.
 >
-> **Última actualización: 2026-11-20**
+> **Última actualización: 2026-11-22**
+
+## Sesión 2026-11-22
+
+> Las tres entradas de hoy son la **réplica de AUTOREEMBOLSOSjygactivo #219, #220 y #221**. El análisis del incidente del 20/11 (tres
+> retiros pagados dos veces, $2,4M) se hizo EN AQUEL REPO con los logs de AWS: cada retiro pasó UNA sola vez por la app; el segundo pago
+> fue una transferencia hecha por FUERA de la app, cargada directo en hgcash (saliente sin `externalID`). Acá no hubo incidente: se replica
+> el código para que este proyecto tenga las mismas defensas. Detalle completo en el WORKLOG de aquel repo.
+
+### 353. 🛑 Retiro "VERIFICANDO" cuando el banco no responde + el cartel del chat muestra EN PROCESO / FALLADO (réplica #221 de AUTOREEMBOLSOSjygactivo) — admin-sw v87
+- **Problema:** el cartel del retiro en el chat solo pedía `pending_review`: apenas un pago fallaba (o quedaba en proceso) DESAPARECÍA y el
+  operador se quedaba sin saber si había salido. "Rechazado" y "no se sabe si salió" se veían igual.
+- **Qué se hizo (hgcash; Finpro ya consultaba su lote y queda `paying`):**
+  - Envío sin respuesta clara (red / 5xx / 408 / 429) → `failed` + `hgSendUnknown` + **`verifyUntil` = ahora + 3 min** (`PAYOUT_VERIFY_MS`),
+    y se anota `paidVia:'hgcash'` + `hgAccountKey`. Respuesta 409 `{verifying, wait}` con cartel fijo. Un 4xx claro sigue siendo 400, ahora
+    con el texto "El banco RECHAZÓ el pago (no salió)".
+  - Mientras dura la ventana (`_payoutVerifyBlock`): `/pay` (los dos bancos), `/pay-other-bank`, `/cancel` y `/dismiss` devuelven 409.
+  - Si el banco avisa: webhook de estado con nuestro id (PENDING/PROCESSING → `paying`; DONE → pagado + aviso + comprobante) o la SALIDA
+    con nuestro `externalID` en el webhook de movimientos (→ DONE). Nota interna "✅ el pago que había dado ERROR SÍ SALIÓ". Un ERROR claro
+    libera la ventana. A los 3 min sin aviso: nota "⏱️ el banco no informó ninguna salida, ya se puede reintentar".
+  - Panel: el cartel pide `status=chat` (pendiente + en proceso/fallado con envío en las últimas 24 h) y tiene 4 caras: RETIRO PENDIENTE,
+    🛑 VERIFICANDO (sin botones, cuenta regresiva), ⏳ PAGO EN PROCESO ("🔄 Consultar estado"), PAGO FALLADO (dice si fue rechazo claro o sin
+    respuesta). Se refresca solo (evento de socket `payout_update` + cada 15 s). Los errores de pago ahora son `alert`.
+- **Límite honesto:** pasados los 3 min "no informó ninguna salida" no es prueba de que no salió; por eso reintentar por otra cuenta/banco
+  sigue pidiendo confirmación (#351).
+
+### 352. 🧾 Comprobante de los pagos por Finpro + 🛑 alerta de pagos salientes hechos por FUERA de la app (réplica #220 de AUTOREEMBOLSOSjygactivo)
+- **Comprobante Finpro** (`maybeSendFinproReceipt`): al confirmarse un pago por Finpro (rama DONE de `handlePayoutStatusWebhook`) el cliente
+  recibe un comprobante en TEXTO: monto, fecha, titular de la cuenta que pagó, destino, CBU y **código COELSA**. Editable en COMANDOS:
+  `/sys_payout_receipt_finpro` (vacío = no se envía). Idempotente por `receiptSentAt`.
+- **Alerta de saliente externo** (`_alertUnknownOutbound`): cuando el banco informa una salida `outKind:'unknown'`, y coincide en monto + CBU
+  con un retiro de las últimas 48 h → nota interna roja en el chat: "🛑 POSIBLE PAGO DOBLE" (pagado / pagándose por la app) o "⚠️ RETIRO
+  PAGADO POR FUERA DE LA APP" (pendiente o fallado). Espera 20 s (y reintenta a 60 s / 120 s). Una alerta por movimiento (`raw._extAlertAt`).
+- **Candado** (`_payoutResendGuard`, paso 1b): si desde que se pidió el retiro ya salió por fuera de la app el mismo monto al mismo CBU, el
+  botón de pagar pide confirmación ANTES del primer envío.
+- **Diferencias con la fuente (adaptado a este repo):**
+  - **Sin Telegram acá:** en la fuente la alerta va SIEMPRE por Telegram; acá, si el saliente no coincide con ningún retiro, queda SOLO en
+    el log (`[bank-out-externo]`). Con retiro coincidente sí queda la nota en el chat.
+  - **Clasificación de salientes de hgcash (código que la fuente ya tenía y acá no):** se sumó al webhook de movimientos de hgcash el
+    marcado `outKind` por `externalID` (`payout` + `payoutId` / `unknown` / `sweep`), que es de lo que dependen la alerta, el paso 1b y el
+    hook del #353. Sin bajadas (`BankSweep` no existe acá): se sacaron de `_alertUnknownOutbound` el chequeo de `BankSweep` y `sweepId`.
+    Los salientes de hgcash anteriores al deploy quedan sin clasificar.
+- **Límite:** la app avisa, no impide un pago hecho en el panel del banco.
+
+### 351. 🛑 Candado anti PAGO DOBLE entre cuentas/bancos + la IA lee el código COELSA + Finpro ya no deja comprobantes sin cargar + sacar una cuenta de la rotación (réplica #219 de AUTOREEMBOLSOSjygactivo)
+- **Candado** `_payoutResendGuard` (server.js, antes de `_payPayoutViaFinpro`), llamado por los DOS caminos de pago antes de reclamar el retiro:
+  1. Si ya hay una **salida del banco con el id de ese retiro** (`BankMovement` Outbound) → no se paga otra vez, ni confirmando.
+  2. Si después del envío anterior **salió el mismo monto al mismo CBU/CVU** sin estar ligado a otro retiro → pide confirmación.
+  3. Reintento por **otra cuenta u otro banco**: espera **2 minutos** desde el envío anterior (`PAYOUT_RESEND_COOLDOWN_MS`) y, si aquel no
+     fue un rechazo claro, pide confirmación. Por la MISMA cuenta no espera.
+  Cada envío se anota ANTES de mandarlo (`PendingPayout.lastSendAt/Bank/Account/Result` + `sendLog`, últimos 20).
+- **hgcash:** la cuenta que paga queda FIJA para todo el pedido (perfil + token + `accountId`): `createCashOut({ token })`,
+  `lookupAlias(alias, token)`, `resolveHgcashAccountId({ acct })`. Si un token ve varias cuentas, se usa la del CBU (o id) de ESE perfil.
+- **Operador:** nota interna "💸 Retiro ENVIADO por <banco · cuenta>"; el cartel de confirmación dice **SALE POR: <banco · cuenta>**; la
+  nota de fallo aclara si el pago PUDO haber salido. **Costo:** reintentar por otra cuenta/banco obliga a esperar hasta 2 minutos.
+- **COELSA:** la IA devuelve además `codigo_coelsa` (`Comprobante.coelsaCode`, validado: 22 alfanuméricos con letras y números). Lo usan
+  `_finproVerifyInputFor` (consulta por código) y `_comprobanteMatchesMovement` (regla 1b). **Adaptado:** el `comprobanteAiService` de este
+  repo es más simple que el de la fuente (un solo prompt, sin salida estructurada ni `operationLabel`): el campo se pidió dentro de ese
+  prompt y se sumó `normCoelsa`.
+- **Finpro "cargaba muy pocos":** una búsqueda por MONTO inconclusa ya no deja el comprobante en `needs_review` (el aviso del banco que
+  llega segundos después lo puede matchear y carga sola). Acá el chat igual pasa a ABIERTOS (`_finproAmbiguousToOpen`, propio de este repo).
+- **Texto:** "✅ Comprobante verificado — no es duplicado" pasó a "Comprobante NO repetido…" (que la plata entró lo confirma la carga
+  automática o el banco).
+- **Rotación:** tilde "entra en la rotación" por cuenta (`bankRotation.limits[id].skip`): destildada no se elige como destino y, si está
+  en uso a mano, el motor no la cambia. Sigue recibiendo cargas.
+- **Validado (las tres entradas juntas):** `node --check` en los 8 archivos tocados; `check-tdz` OK; `test-payout-guard` (12, nuevo),
+  `test-bank-rotation` (21), `test-finpro-accounts` (43), `test-finpro-webhook` (17), `test-casino-url` (13). Comparación función por función
+  contra la fuente: `_payoutResendGuard`, `_payoutNoteSend/Result`, `_payoutVerifyLeft/Block`, `maybeSendFinproReceipt`,
+  `resolveHgcashAccountId`, `_finproVerifyComprobante`, `_rotNorm`, rutas `/pay-other-bank`, `/dismiss` y `GET /payouts` quedaron iguales.
+  **NO probado** contra los bancos, la IA real ni en navegador (no hay node_modules local). La alerta de saliente externo, el comprobante
+  Finpro y la rama `_wasUnknown` no tienen test en frío.
+- **Pendiente / a mirar tras el deploy:** que la alerta no salte con pagos propios (si saltara: el movimiento de hgcash no trae nuestro
+  `externalID`); que la IA lea bien el COELSA en comprobantes reales (el modelo por defecto acá es más chico que el de la fuente); el cartel
+  en el primer pago real.
 
 ## Sesión 2026-11-20
 
