@@ -1396,6 +1396,18 @@ En hgcash, la cuenta REAL que debita un perfil la decide `_hgPickApiAccount` (fi
 guardado > adivinar `how:'guess'`): un token puede ver varias cuentas (`GET /accounts`). Una cuenta adivinada no se guarda en el perfil;
 al cargar un token que ve varias tampoco se toma "la primera". `_hgLastApiPick` recuerda lo último resuelto (la nota interna agrega
 `— debitó de "X"` vía `_hgDebitNote` si no coincide con el perfil).
+**Correcciones de la auditoría (#358c, réplica #223c):** titular = IGUAL en forma compacta (`_hgNameKey`; titular, accountName y etiqueta)
+y recién después CONTENIDO por palabras enteras (`_hgNameContains`; nunca la etiqueta). `_normName` es OTRA cosa (identidad bancaria /
+anti-multicuenta): no mezclarlas. `_hgValidateCreds` conserva CBU/CVU de cada cuenta y `_hgIdForNewToken(perfil, v)` decide el id al
+cargar un token (única / CBU / titular / null), también en la ruta legacy `/api/admin/hgcash/credentials`.
+**Candado por cuenta REAL:** el envío guarda `PendingPayout.lastSendAccountId` (id de la cuenta del banco; `_payoutNoteSend(id, bank,
+account, by, realAccountId)`) y `_payoutResendGuard(payout, bank, account, destCbu, confirmed, realAccountId)` trata como "otra ruta"
+al mismo perfil con otra cuenta real (espera + confirmación). El reintento por 403 actualiza `lastSendAccountId`. Finpro no pasa cuenta
+real (null). `resolveHgcashAccountId({ acct })` (un pago) NO usa el respaldo "último movimiento": devuelve null y el pago no sale.
+`_payoutPickSource(body, monto, prev)`: en `richest`, un retiro con `lastSendBank` y `lastSendResult !== 'rejected'` vuelve por la misma
+cuenta (`why:'retry-same'`) si ese slot sigue existiendo; `_paySlotNoWebhook(s)` saca de `richest` a un perfil hgcash sin secreto propio
+solo si otro perfil tiene secreto (el payload lo marca `noWebhook`). La respuesta de `/pay` trae `paidFrom`.
+**No hay** alarma de pago doble entre dos cuentas del mismo banco; un retiro fallado antes del #358c no tiene `lastSendAccountId`.
 Endpoints: `GET /api/admin/payout-sources` (quien paga retiros) · `POST /api/admin/payout-sources` y
 `POST /api/admin/hgcash/accounts/:key/pay-account` (solo admin general). `GET /api/admin/payouts` suma `payFrom`, `paySources`, `payFromReady`.
 Panel: bloque "💸 ¿De qué CUENTA salen los retiros?" en 🏦 Bancos automáticos (`loadPayoutSources` / `savePayoutSource` / `pinHgPayAccount`)
