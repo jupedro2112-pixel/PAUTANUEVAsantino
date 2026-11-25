@@ -5,7 +5,9 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-11-22** — **candado anti pago doble entre cuentas/bancos, código COELSA del comprobante, alerta de pagos
+> Última actualización: **2026-11-25** — **regalo a un jugador con bono activo → se UNIFICA con el bono anterior, tarjetas del cierre
+> en Transacciones y descripción detallada de toda acreditación hacia 1girox (#354–#357, réplica #236–#239 de CARGASGIROXactivo; §4.5)**.
+> Antes: **2026-11-22** — **candado anti pago doble entre cuentas/bancos, código COELSA del comprobante, alerta de pagos
 > salientes hechos por fuera de la app, comprobante de los pagos por Finpro y retiro "VERIFICANDO" (#351–#353, réplica #219–#221 de
 > AUTOREEMBOLSOSjygactivo; ver el final de §11)**. Antes: **2026-11-04** — **sección propia "🏛️ Bancos — Configuración" en el panel (#348, réplica #224 de CARGASGIROXactivo: todo lo de bancos salió de COMANDOS; mismos ids/endpoints)** y **hasta 3 CUENTAS hgcash con cuenta ACTIVA rotable (#347, réplica #223/#223b de
 > CARGASGIROXactivo; ver "Cuentas hgcash múltiples" en la auto-carga del banco)**. Antes: **2026-10-29** — **PÁGINA DEL CASINO desde COMANDOS (#346)**: `/sys_casino_url` re-apunta el
@@ -471,17 +473,37 @@ reintento manda la misma reference y la plataforma responde `duplicate:true`.
   con el rollover del flujo (figuran como **Bono** en el panel de 1girox, no como
   Carga). `creditUserBalance` sin multiplier delega en `creditGift` con rollover 0.
   - Rollover 0 = bono directo (v1.10: disponible al instante, no pisa nada).
-  - Rollover > 0 PISA a un bono activo → si el jugador tiene bono en curso o sin
-    reclamar (> $50) o el feat no está, `creditGift` cae a **depósito con
-    `multiplier`** (nunca se le debita el bono viejo a nadie). Errores definitivos
-    de `/bonus` (422 / feature_disabled / out_of_range) → depósito; errores de red →
-    el caller reintenta con la MISMA reference.
+  - Rollover > 0 PISA a un bono activo. **Jugador con bono activo (> $50) = UNIFICAR (#355, default; réplica #237 de
+    CARGASGIROXactivo):** `creditGift` otorga `/bonus` por `bonus_locked + regalo` con el rollover vigente y la MISMA reference
+    (1girox cancela el resto del viejo: el jugador gana solo el regalo y todo queda bajo rollover). Devuelve `mergedOld`,
+    `mergedTotal`, `giftAmount`; el caller registra SOLO el regalo y agrega `metadata.mergedBonus` (`_giftMeta` /
+    `_giftMetaFields` en server.js). Un mensaje al cliente con el objetivo de apuesta usa `mergedTotal || monto` y
+    `result.rolloverApplied`. **Control de plata:** con el saldo de la respuesta, si subió bastante más que el regalo
+    (`> regalo + max(100, 50% del viejo)`) → `setGiftMergeAnomalyHook`: server.js pasa `fallback` a `'deposit'`, guarda
+    `mergeOffAt/mergeOffWhy`, loguea `[gift-merge]` y deja una nota interna en el chat del jugador (sin Telegram acá).
+  - **No se unifica → depósito con `multiplier` (figura como Carga):** bono cumplido sin reclamar (`claimable_total > 0`),
+    total sobre `fixed_max`, monto fuera de `fixed_min/max`, multiplier no permitido, feat apagado o rechazo definitivo de
+    `/bonus` (422 / feature_disabled / out_of_range). Ese depósito viaja con la descripción
+    `BONO (contar como BONO, NO como carga): … — sale como depósito por una limitación de la API de 1girox` (#356) y el
+    resultado trae `via/creditedAs:'deposit'` + `fallbackReason` → la Transaction queda con `metadata.creditedAs:'deposit'`.
+    Errores de red → se devuelve el fallo tal cual; el caller reintenta con la MISMA reference.
+  - **Modo (#354):** `Config['bonusRolloverGlobal'].fallback` = `'merge'` (default) | `'deposit'` (lo de antes: depósito con
+    rollover) | `'bonus0'` (bono sin rollover; si 1girox tampoco lo acepta, depósito libre). Radios en la card "Rollover
+    GLOBAL de bonos"; resolver `girox.setGiftFallbackResolver`. Solo aplica a `creditGift` (regalos); un `multiplier`
+    EXPLÍCITO en `creditUserBalance` (bono manual, lotes, código de bienvenida) sigue yendo a `/bonus` directo por el monto pedido.
+  - **Para el cierre (#354/#355):** `GET /api/admin/transactions` devuelve `summary.giftsAsDeposit(+Count)` (regalos que
+    1girox anotó como Carga: restarlos de las cargas de 1girox) y `summary.mergedBonus(+Count)` (bonos anteriores
+    re-emitidos al unificar: en 1girox el Bono figura por viejo + regalo y hay una "Cancelación de bono" por el viejo).
+  - **Descripción hacia 1girox (#357):** toda acreditación manda un texto que empieza con el TIPO en mayúsculas
+    (`REEMBOLSO diario/semanal/mensual`, `REEMBOLSO EN VIVO`, `REGALO — Rakeback / Fueguito / ruleta / lote`,
+    `BONO manual / BONO — código de bienvenida / nivel VIP`, `COMISIÓN de referidos`, `DEVOLUCIÓN de retiro rechazado`).
+    La descripción de la Transaction local y lo que lee el cliente NO cambian.
   - Al cumplir el rollover el bono queda "a reclamar" → `_autoClaimOnEntry` en
     `/api/platform/session` (throttle 15 min) y tras cada depósito con bonus.
   - **NO volver a usar `depositToUser` para regalos.** Las cargas reales siguen por
     `depositToUser` (con `no_bonus:true` si no llevan bono nuestro).
 - **Rollover GLOBAL de bonos (#278, 2026-09-16):** `Config['bonusRolloverGlobal']`
-  `{enabled, x}` (default ON, x3; opciones 0/2/3/5/10; `GET/POST
+  `{enabled, x, fallback}` (`fallback` = #354, ver arriba; default ON, x3; opciones 0/2/3/5/10; `GET/POST
   /api/admin/bonus-rollover`, card en Configuración). `giroxService.setRolloverResolver`
   recibe el efectivo desde server.js y lo aplica en `creditGift`, `creditUserBalance`
   con `multiplier` y el `bonus_multiplier` de `depositToUser` cuando la carga lleva bono
@@ -1137,8 +1159,9 @@ El backfill de `usernameLower` corre en CADA arranque (idempotente) y setea
   saliera del id, el reintento tras un fallo falso pagaría doble).
 - **Retiros: validar contra `available`, no `balance`** — el rollover está activo en
   1girox y parte del saldo puede estar bloqueado (§4.5).
-- **Regalos = `creditGift` (bono), NUNCA `depositToUser`** (#266, §4.5). El fallback a
-  depósito+multiplier lo decide `creditGift` solo (bono activo / feat apagado). Flujos
+- **Regalos = `creditGift` (bono), NUNCA `depositToUser`** (#266, §4.5). Unificar con el bono activo (#355) o caer a
+  depósito+multiplier lo decide `creditGift` solo. El monto local del regalo es SIEMPRE el pedido (nunca
+  `result.mergedTotal`); la Transaction lleva `..._giftMeta(result)`. Flujos
   que NO son bono (comisiones, devoluciones de retiro) → `ignoreGlobalRollover:true`.
 - **Rate limit 60/min es POR INSTANCIA** (`GIROX_MAX_RPM`, default 55): con N instancias
   el techo real es N×55. Si aparecen 429, BAJAR el valor (§4.3).

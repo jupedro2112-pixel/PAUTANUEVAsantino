@@ -519,6 +519,34 @@ girox.setRolloverResolver(async () => { // #278
   const g = await getGlobalBonusRollover();
   return g.enabled ? g.effective : null;
 });
+// #354/#355 (réplica #236/#237 de CARGASGIROXactivo) Regalo con rollover a un jugador que YA tiene un bono activo:
+// 'merge' (default) = se UNIFICA (un bono nuevo por resto del viejo + regalo, con el rollover nuevo; figura como BONO) ·
+// 'deposit' = depósito con rollover (figura como CARGA) · 'bonus0' = bono sin rollover. Detalle en giroxService (`_giftFallbackMode`).
+function _giftFallbackFromCfg(raw) { return raw && (raw.fallback === 'deposit' || raw.fallback === 'bonus0') ? raw.fallback : 'merge'; }
+girox.setGiftFallbackResolver(async () => _giftFallbackFromCfg(await getConfig('bonusRolloverGlobal', null)));
+// #355 Si una unificación deja al jugador con MÁS de lo esperado (1girox no debitó el bono viejo), se apaga sola
+// (vuelve a 'deposit') y se avisa: es plata, no se sigue a ciegas. Este repo no tiene Telegram: queda el log
+// `[gift-merge]` + una nota interna en el chat del jugador (la ven los agentes).
+girox.setGiftMergeAnomalyHook(async (a) => {
+  try {
+    const raw = (await getConfig('bonusRolloverGlobal', null)) || {};
+    await setConfig('bonusRolloverGlobal', { enabled: raw.enabled !== false, x: raw.x != null ? raw.x : 3, fallback: 'deposit', mergeOffAt: new Date().toISOString(), mergeOffWhy: `saldo de ${a.username} subió $${a.gained} con un regalo de $${a.gift} (bono viejo $${a.old})` });
+    const msg = `🛑 UNIFICACIÓN DE BONOS APAGADA — ${a.username}: el saldo subió $${a.gained} y el regalo era $${a.gift} (bono anterior $${a.old}, ref ${a.reference || '-'}). 1girox no habría debitado el bono viejo. Los regalos vuelven a salir por depósito con rollover hasta revisarlo (Configuración → Rollover GLOBAL de bonos).`;
+    logger.error('[gift-merge] ' + msg);
+    try {
+      const u = await User.findOne({ username: a.username }).select('id username').lean();
+      if (u) await _emitAdminOnlyChatNote(u.id, u.username, msg);
+    } catch (_) {}
+  } catch (e) { try { logger.error('[gift-merge] no se pudo apagar: ' + e.message); } catch (_) {} }
+});
+// #354 metadata de la Transaction de un regalo: por qué vía salió en 1girox (solo si NO fue bono normal).
+// `_giftMetaFields` = los campos sueltos (para sumar a un `metadata` que ya existe); `_giftMeta` = `{ metadata }` o `{}`.
+function _giftMetaFields(r) {
+  if (r && r.mergedOld) return { creditedAs: 'bonus', mergedBonus: Number(r.mergedOld) }; // #355 unificado con el bono anterior
+  if (!r || (r.creditedAs !== 'deposit' && r.via !== 'deposit')) return {};
+  return Object.assign({ creditedAs: 'deposit' }, r.fallbackReason ? { giftFallback: String(r.fallbackReason).slice(0, 200) } : {});
+}
+function _giftMeta(r) { const f = _giftMetaFields(r); return Object.keys(f).length ? { metadata: f } : {}; }
 girox.setKeyResolver(async (username) => {
   const now = Date.now();
   const hit = _giroxKeyCache.get(username);
@@ -9999,7 +10027,7 @@ app.post('/api/refunds/claim/daily', authMiddleware, async (req, res) => {
         throw e;
       }
 
-      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `REEMBOLSO diario del ${yr.dateStr} — regalo automático de la sala por lo perdido ese día` }); // #357
       if (!depositResult.success) {
         await RefundClaim.deleteOne({ id: _refundClaimId }).catch(() => {});
         return res.json({ success: false, message: 'Error al acreditar el reembolso: ' + depositResult.error, canClaim: true });
@@ -10009,7 +10037,9 @@ app.post('/api/refunds/claim/daily', authMiddleware, async (req, res) => {
 
       await Transaction.create({
         id: uuidv4(), type: 'refund', amount: refundAmount, username,
-        description: `Reembolso diario (${yr.dateStr})`, transactionId: _refundTxId, timestamp: new Date()
+        description: `Reembolso diario (${yr.dateStr})`, transactionId: _refundTxId,
+        ..._giftMeta(depositResult), // #354 regalo que 1girox muestra como Carga · #355 unificado
+        timestamp: new Date()
       });
 
       try {
@@ -10162,7 +10192,7 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
         throw e;
       }
 
-      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `REEMBOLSO semanal del ${fromDateStr} al ${toDateStr} — regalo automático de la sala por lo perdido esa semana` }); // #357
 
       if (!depositResult.success) {
         // No se pudo acreditar → liberar la reserva para permitir reintentar.
@@ -10186,6 +10216,7 @@ app.post('/api/refunds/claim/weekly', authMiddleware, async (req, res) => {
         username,
         description: `Reembolso semanal (${fromDateStr} a ${toDateStr})`,
         transactionId: _refundTxId,
+        ..._giftMeta(depositResult), // #354 regalo que 1girox muestra como Carga · #355 unificado
         timestamp: new Date()
       });
 
@@ -10338,7 +10369,7 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
         throw e;
       }
 
-      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `Reembolso ${_refundPeriodKey}` });
+      const depositResult = await girox.creditUserBalance(username, refundAmount, _refundReference(_refundPeriodKey, userId), { description: `REEMBOLSO mensual del ${fromDateStr} al ${toDateStr} — regalo automático de la sala por lo perdido ese mes` }); // #357
 
       if (!depositResult.success) {
         // No se pudo acreditar → liberar la reserva para permitir reintentar.
@@ -10362,6 +10393,7 @@ app.post('/api/refunds/claim/monthly', authMiddleware, async (req, res) => {
         username,
         description: `Reembolso mensual (${fromDateStr} a ${toDateStr})`,
         transactionId: _refundTxId,
+        ..._giftMeta(depositResult), // #354 regalo que 1girox muestra como Carga · #355 unificado
         timestamp: new Date()
       });
 
@@ -10544,7 +10576,7 @@ app.post('/api/vip/rakeback/claim', authMiddleware, async (req, res) => {
       }
 
       const depositResult = await girox.creditUserBalance(username, amount, _rakebackReference(week.fromDateStr, userId), {
-        description: `Rakeback semanal VIP (${week.fromDateStr} a ${week.toDateStr})`
+        description: `REGALO — Rakeback semanal VIP del ${week.fromDateStr} al ${week.toDateStr}: ${pct}% de $${Math.round(wagered).toLocaleString('es-AR')} apostados` // #357
       });
 
       if (!depositResult.success) {
@@ -10564,6 +10596,7 @@ app.post('/api/vip/rakeback/claim', authMiddleware, async (req, res) => {
         amount,
         description: `Rakeback semanal VIP (${week.fromDateStr} a ${week.toDateStr})`,
         transactionId: txId,
+        ..._giftMeta(depositResult), // #354 regalo que 1girox muestra como Carga · #355 unificado
         timestamp: new Date()
       }).catch(() => {});
 
@@ -10944,9 +10977,11 @@ const BONUS_ROLLOVER_OPTIONS = [0, 2, 3, 5, 10];
 const BONUS_ROLLOVER_DEFAULT = { enabled: true, x: 3 };
 async function getGlobalBonusRollover() {
   let enabled = BONUS_ROLLOVER_DEFAULT.enabled, x = BONUS_ROLLOVER_DEFAULT.x;
+  let fallback = 'merge', mergeOffAt = null, mergeOffWhy = null; // #354/#355
   try {
     const raw = await getConfig('bonusRolloverGlobal');
     if (raw && typeof raw === 'object') {
+      fallback = _giftFallbackFromCfg(raw); mergeOffAt = raw.mergeOffAt || null; mergeOffWhy = raw.mergeOffWhy || null;
       enabled = raw.enabled !== false;
       const n = Math.round(Number(raw.x));
       if (BONUS_ROLLOVER_OPTIONS.includes(n)) x = n;
@@ -10966,7 +11001,7 @@ async function getGlobalBonusRollover() {
     const up = allowed.find((n) => n > x);
     effective = up != null ? up : allowed[allowed.length - 1];
   }
-  return { enabled, x, effective, allowed, snapped: effective !== x, options: BONUS_ROLLOVER_OPTIONS };
+  return { enabled, x, effective, allowed, snapped: effective !== x, options: BONUS_ROLLOVER_OPTIONS, fallback, mergeOffAt, mergeOffWhy };
 }
 // Rollover a usar en un flujo: el GLOBAL si está encendido, si no el propio del flujo.
 async function applyGlobalRollover(flowValue) {
@@ -11826,7 +11861,7 @@ app.post('/api/admin/bonus', authMiddleware, depositorMiddleware, async (req, re
       {
         // Elige un multiplicador VÁLIDO para la plataforma (x1 puede no estarlo).
         multiplier: await getGiroxBonusMultiplier(),
-        description: 'Bonificación otorgada'
+        description: `BONO manual — bonificación otorgada por el agente ${(req.user && req.user.username) || '?'} desde el panel` // #357
       }
     );
 
@@ -14385,8 +14420,10 @@ app.post('/api/admin/bonus-rollover', authMiddleware, adminMiddleware, async (re
     const x = Math.round(Number(b.x));
     if (!BONUS_ROLLOVER_OPTIONS.includes(x)) return res.status(400).json({ error: `Rollover inválido. Opciones: ${BONUS_ROLLOVER_OPTIONS.map((n) => 'x' + n).join(', ')}` });
     const enabled = b.enabled !== false;
-    await setConfig('bonusRolloverGlobal', { enabled, x });
-    logger.info(`[bonus-rollover] ${req.user.username}: global ${enabled ? 'ON' : 'OFF'} x${x}`);
+    const prevCfg = await getConfig('bonusRolloverGlobal', null);
+    const fallback = ['merge', 'deposit', 'bonus0'].includes(b.fallback) ? b.fallback : _giftFallbackFromCfg(prevCfg); // #354/#355
+    await setConfig('bonusRolloverGlobal', { enabled, x, fallback });
+    logger.info(`[bonus-rollover] ${req.user.username}: global ${enabled ? 'ON' : 'OFF'} x${x} · jugador con bono activo → ${fallback === 'deposit' ? 'depósito con rollover (Carga)' : fallback === 'bonus0' ? 'bono sin rollover' : 'unificar bonos'}`);
     res.json(await getGlobalBonusRollover());
   } catch (e) { res.status(500).json({ error: 'Error del servidor' }); }
 });
@@ -14575,7 +14612,7 @@ app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, 
       // #266: como BONO de 1girox (creditGift: /bonus con rollover, cae a depósito
       // con multiplier solo si el jugador ya tiene un bono activo o el feat no está).
       const credit = await girox.creditGift(user.username, prize.value, {
-        description: 'Ruleta de bienvenida — premio en saldo', reference: `vip-wroul-${user.id}`, rolloverX: _wrMult
+        description: `REGALO — Premio de la ruleta de bienvenida: ${prize.label || 'premio en saldo'}`, reference: `vip-wroul-${user.id}`, rolloverX: _wrMult // #357
       });
       if (!credit.success) {
         await User.updateOne(
@@ -14587,12 +14624,13 @@ app.post('/api/welcome-roulette/spin', authMiddleware, authLimiter, async (req, 
           `🎡 Ruleta: salió ${prize.label} pero la acreditación en la plataforma FALLÓ (${credit.error || 's/detalle'}). El giro se liberó: el cliente puede volver a girar.`);
         return res.status(502).json({ error: 'No pudimos acreditar tu premio ahora. Probá de nuevo en un momento.' });
       }
+      if (credit.rolloverApplied != null) _wrMult = Math.max(0, Number(credit.rolloverApplied) || 0); // #354 lo que REALMENTE se aplicó
       await User.updateOne({ id: user.id, welcomeRouletteStatus: 'pending' }, { $set: { welcomeRouletteStatus: 'credited', welcomeRouletteRolloverX: _wrMult } }).catch(() => {});
       await Transaction.create({
         id: uuidv4(), type: 'bonus', userId: user.id, username: user.username,
         amount: prize.value, description: 'Ruleta de bienvenida — premio en saldo',
         transactionId: (credit.data && (credit.data.transfer_id || credit.data.transferId)) || null,
-        metadata: { source: 'welcome_roulette' }, timestamp: new Date()
+        metadata: { source: 'welcome_roulette', ..._giftMetaFields(credit) }, timestamp: new Date()
       }).catch(() => {});
       await _emitAdminOnlyChatNote(user.id, user.username,
         `🎡 Ruleta de bienvenida: ganó ${prize.label} → SALDO acreditado automático $${Number(prize.value).toLocaleString('es-AR')}${_wrMult ? ` con rollover x${_wrMult}` : ' sin rollover'}. No hay que hacer nada.`);
@@ -14888,7 +14926,7 @@ app.post('/api/cashback/claim', authMiddleware, authLimiter, async (req, res) =>
     try {
       // #266: como BONO de 1girox (no como Carga), con el rollover del panel.
       credit = await girox.creditGift(username, amount, {
-        description: `Reembolso ${st.pct}% de tu pérdida acumulada`, reference: ref, rolloverX: st.rolloverX
+        description: `REEMBOLSO EN VIVO — ${st.pct}% de la pérdida acumulada del jugador (regalo automático de la sala)`, reference: ref, rolloverX: st.rolloverX // #357
       });
     } catch (e) { credit = { success: false, error: e.message }; }
     if (!credit || !credit.success) {
@@ -14901,13 +14939,13 @@ app.post('/api/cashback/claim', authMiddleware, authLimiter, async (req, res) =>
     await Transaction.create({
       id: uuidv4(), type: 'bonus', userId, username, amount,
       description: `Cashback instantáneo ${st.pct}% (pérdida neta acumulada)`,
-      transactionId: txId, metadata: { source: 'instant_cashback', dateKey: st.dateKey, seq: claimDoc.seq },
+      transactionId: txId, metadata: { source: 'instant_cashback', dateKey: st.dateKey, seq: claimDoc.seq, ..._giftMetaFields(credit) },
       timestamp: new Date()
     }).catch(() => {});
     await _emitAdminOnlyChatNote(userId, username,
       `📉 REEMBOLSO acumulativo: reclamó $${Number(amount).toLocaleString('es-AR')} (${st.pct}% de su pérdida neta acumulada de $${Number(st.netwinToday).toLocaleString('es-AR')} — bonos regalados EXCLUIDOS de la base — menos lo ya cobrado)${st.rolloverX ? ` con rollover x${st.rolloverX}` : ''}. Acreditado automático — el contador le arranca de 0. Este monto se descuenta de su reembolso semanal/mensual.`);
     logger.info(`[cashback] ${username} → $${amount} acreditado (netwin hoy $${st.netwinToday}, seq ${claimDoc.seq})`);
-    res.json({ success: true, amount, rolloverX: st.rolloverX, pct: st.pct, transactionId: txId });
+    res.json({ success: true, amount, rolloverX: credit.rolloverApplied != null ? credit.rolloverApplied : st.rolloverX, pct: st.pct, transactionId: txId }); // #354 el rollover realmente aplicado
   } catch (e) {
     logger.error(`[cashback] claim falló: ${e.message}`);
     res.status(500).json({ error: 'Error del servidor' });
@@ -15149,7 +15187,7 @@ app.post('/api/community-code/claim', authMiddleware, authLimiter, async (req, r
       const _welcomeRolloverX = await applyGlobalRollover(await getWelcomeCodeRolloverX()); // #278
       const credit = await girox.creditUserBalance(
         user.username, amount, `vip-welcome-${user.id}`,
-        { multiplier: _welcomeRolloverX, description: 'Bono sorpresa — código de bienvenida de la Comunidad' }
+        { multiplier: _welcomeRolloverX, description: 'BONO — Bono sorpresa por el código de bienvenida de la Comunidad' } // #357
       );
       if (!credit.success) {
         // Restaurar la reserva (guard en 'pending') para que pueda reintentar.
@@ -15805,7 +15843,7 @@ app.post('/api/fire/claim-reward', authMiddleware, async (req, res) => {
     const _fireMult = await applyGlobalRollover(await getFireRolloverMultiplier()); // #278
     // #266: como BONO de 1girox (creditGift), misma reference de siempre.
     const bonusResult = await girox.creditGift(username, rewardAmount, {
-      description: rewardDesc, reference: _fireRef, rolloverX: _fireMult
+      description: `REGALO — Fueguito (racha diaria): ${rewardDesc}`, reference: _fireRef, rolloverX: _fireMult // #357
     });
 
     if (!bonusResult.success) {
@@ -15846,6 +15884,7 @@ app.post('/api/fire/claim-reward', authMiddleware, async (req, res) => {
         username,
         amount: rewardAmount,
         description: `Fueguito - ${rewardDesc}`,
+        ..._giftMeta(bonusResult), // #354 regalo que 1girox muestra como Carga · #355 unificado
         timestamp: new Date()
       });
     } catch (txErr) {
@@ -15854,14 +15893,19 @@ app.post('/api/fire/claim-reward', authMiddleware, async (req, res) => {
 
     logger.info(`[FIRE_REWARD] claim-reward OK userId=${userId} username=${username} amount=${rewardAmount}`);
 
-    const _rolloverMsg = _fireMult > 0
-      ? ` Para poder RETIRARLOS tenés que apostar $${Math.round(rewardAmount * _fireMult).toLocaleString('es-AR')} (rollover x${_fireMult}). ¡Ya podés jugarlos!`
+    // #354/#355: lo que REALMENTE se aplicó (0 si salió como bono sin rollover) y, si se unificó con el bono
+    // anterior, el objetivo es sobre el bono unificado. El premio (`reward`) es SIEMPRE el monto del regalo.
+    const _fireApplied = bonusResult.rolloverApplied != null ? Math.max(0, Number(bonusResult.rolloverApplied) || 0) : _fireMult;
+    const _fireBase = Number(bonusResult.mergedTotal) > 0 ? Number(bonusResult.mergedTotal) : rewardAmount;
+    const _rolloverMsg = _fireApplied > 0
+      ? (bonusResult.mergedTotal ? ` Se sumaron a tu bono anterior: ahora tenés un solo bono de $${Math.round(_fireBase).toLocaleString('es-AR')}.` : '') +
+        ` Para poder RETIRARLOS tenés que apostar $${Math.round(_fireBase * _fireApplied).toLocaleString('es-AR')} (rollover x${_fireApplied}). ¡Ya podés jugarlos!`
       : '';
     res.json({
       success: true,
       reward: rewardAmount,
-      rolloverMultiplier: _fireMult,
-      rolloverTarget: _fireMult > 0 ? Math.round(rewardAmount * _fireMult) : 0,
+      rolloverMultiplier: _fireApplied,
+      rolloverTarget: _fireApplied > 0 ? Math.round(_fireBase * _fireApplied) : 0,
       message: `🎉 ¡$${rewardAmount.toLocaleString()} acreditados en tu cuenta!${_rolloverMsg}`
     });
   } catch (error) {
@@ -17873,6 +17917,23 @@ app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, 
       }
     }
 
+    // #354 Regalos que 1girox anotó como CARGA (salieron por depósito): hay que RESTARLOS de las cargas de 1girox al cerrar.
+    let giftsAsDeposit = 0, giftsAsDepositCount = 0;
+    try {
+      const gd = await Transaction.aggregate([
+        { $match: Object.assign({}, baseQuery, { 'metadata.creditedAs': 'deposit' }) },
+        { $match: { type: { $nin: ['deposit', 'withdrawal'] } } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]);
+      if (gd[0]) { giftsAsDeposit = gd[0].total || 0; giftsAsDepositCount = gd[0].count || 0; }
+    } catch (_) {}
+    // #355 Bonos anteriores re-emitidos al UNIFICAR: en 1girox el Bono figura por (viejo + regalo) y hay una "Cancelación de bono" por el viejo.
+    let mergedBonus = 0, mergedBonusCount = 0;
+    try {
+      const mb = await Transaction.aggregate([
+        { $match: Object.assign({}, baseQuery, { 'metadata.mergedBonus': { $gt: 0 } }) },
+        { $group: { _id: null, total: { $sum: '$metadata.mergedBonus' }, count: { $sum: 1 } } }]);
+      if (mb[0]) { mergedBonus = mb[0].total || 0; mergedBonusCount = mb[0].count || 0; }
+    } catch (_) {}
     // Saldo neto = depósitos - retiros (bonos y reembolsos no afectan)
     const summary = {
       deposits,
@@ -17881,6 +17942,8 @@ app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, 
       refunds,
       fireRewards,
       referrals,
+      giftsAsDeposit, giftsAsDepositCount, // #354
+      mergedBonus, mergedBonusCount, // #355
       netBalance: deposits - withdrawals,
       totalTransactions: totalAll
     };
@@ -22776,7 +22839,7 @@ app.post('/api/admin/payouts/:id/cancel', authMiddleware, withdrawerMiddleware, 
         if (r && r.success) { chipsOk = true; await mkRefundTx(chipsPart, 'chips', r.data); }
       }
       if (bonusPart > 0) {
-        const r = await girox.creditUserBalance(payout.username, bonusPart, `vip-payoutref-bonus-${payout.id}`, { ignoreGlobalRollover: true }); // devolución, no bono (#278)
+        const r = await girox.creditUserBalance(payout.username, bonusPart, `vip-payoutref-bonus-${payout.id}`, { ignoreGlobalRollover: true, description: 'DEVOLUCIÓN de retiro rechazado — parte del retiro que era bono (no es un regalo nuevo)' }); // devolución, no bono (#278) · #357
         if (r && r.success) { bonusOk = true; await mkRefundTx(bonusPart, 'bonus', r.data); }
       }
     } catch (e) {
@@ -24221,7 +24284,7 @@ app.post('/api/roulette/spin', authMiddleware, async (req, res) => {
     try {
       // #266: como BONO de 1girox (creditGift), no como Carga.
       credit = await girox.creditGift(username, prizeARS, {
-        description: 'Ruleta diaria — premio en saldo', reference: `vip-roulette-${spinDoc.id}`, rolloverX: _dRoll
+        description: `REGALO — Premio de la ruleta diaria: ${pick.label || ''}`, reference: `vip-roulette-${spinDoc.id}`, rolloverX: _dRoll // #357
       });
     } catch (e) {
       credit = { success: false, error: e.message };
@@ -24264,7 +24327,7 @@ app.post('/api/roulette/spin', authMiddleware, async (req, res) => {
       id: uuidv4(), type: 'bonus', userId, username, amount: Number(prizeARS),
       description: `Ruleta diaria — premio en saldo (${pick.label})${_dRoll ? ` · rollover x${_dRoll}` : ''}`,
       adminUsername: 'auto-roulette', adminRole: 'system', transactionId: txId,
-      metadata: { source: 'daily_roulette', spinId: spinDoc.id, rolloverX: _dRoll, via: credit.via || null },
+      metadata: { source: 'daily_roulette', spinId: spinDoc.id, rolloverX: _dRoll, via: credit.via || null, ..._giftMetaFields(credit) },
       timestamp: new Date()
     }).catch((e) => logger.warn(`[ROULETTE] no se pudo guardar la Transaction del giro ${spinDoc.id}: ${e.message}`));
     logger.info(`[ROULETTE] ${username} → $${prizeARS} acreditado tx=${txId}`);
@@ -24383,7 +24446,7 @@ app.post('/api/admin/roulette/:id/retry-credit', authMiddleware, adminMiddleware
       // #266/#267: mismo camino que el giro original (BONO con el rollover del
       // premio; misma reference → idempotente).
       credit = await girox.creditGift(spin.username, spin.prizeARS, {
-        description: 'Ruleta diaria — premio en saldo (reintento)', reference: `vip-roulette-${spin.id}`,
+        description: `REGALO — Premio de la ruleta diaria: ${spin.prizeLabel || ''} (reintento desde el panel)`, reference: `vip-roulette-${spin.id}`, // #357
         rolloverX: Number(spin.rolloverX) || 0
       });
     } catch (e) {
@@ -24405,7 +24468,7 @@ app.post('/api/admin/roulette/:id/retry-credit', authMiddleware, adminMiddleware
           description: `Ruleta diaria — premio en saldo (${spin.prizeLabel || spin.prizeARS})${spin.rolloverX ? ` · rollover x${spin.rolloverX}` : ''}`,
           adminUsername: req.user.username || 'admin', adminRole: req.user.role || 'admin',
           transactionId: credit.data?.transfer_id || credit.data?.transferId || null,
-          metadata: { source: 'daily_roulette', spinId: spin.id, rolloverX: Number(spin.rolloverX) || 0, via: credit.via || null, retry: true },
+          metadata: { source: 'daily_roulette', spinId: spin.id, rolloverX: Number(spin.rolloverX) || 0, via: credit.via || null, retry: true, ..._giftMetaFields(credit) },
           timestamp: new Date()
         });
       }
@@ -25810,7 +25873,7 @@ async function _creditNotifBatchGift(uDoc, batch) {
   const _ref = `vip-nbatch-${batch.id}-${uDoc.id}`.slice(0, 100);
   const credit = await girox.creditUserBalance(
     uDoc.username, batch.amount, _ref,
-    { multiplier: rollover, description: `Regalo por notificación — lote de ${batch.sentBy}` }
+    { multiplier: rollover, description: `REGALO — Fichas de regalo del lote de notificaciones${batch.name ? ` "${batch.name}"` : ''} (enviado por ${batch.sentBy})` } // #357
   );
   if (!credit.success) {
     logger.warn(`[notif-batch] crédito de fichas falló para ${uDoc.username} (lote ${batch.id}): ${credit.error || 's/detalle'}`);

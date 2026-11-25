@@ -281,6 +281,20 @@ function setKeyResolver(fn) { _keyResolver = typeof fn === 'function' ? fn : nul
 // `ignoreGlobalRollover:true` (comisiones de referidos, devoluciones de retiro).
 let _rolloverResolver = null;
 function setRolloverResolver(fn) { _rolloverResolver = typeof fn === 'function' ? fn : null; }
+// #354/#355 Qué hacer con un REGALO con rollover cuando el jugador YA TIENE un bono activo (otorgarle otro lo PISA):
+//   'merge' (default, #355) = UNIFICAR: se otorga UN bono nuevo por (lo que le queda del bono viejo + el regalo) con el
+//             rollover nuevo; 1girox debita el resto del viejo ("Cancelación de bono") → el jugador gana solo el regalo y
+//             TODO queda con rollover. Figura como BONO. Lo que no se pueda unificar va por depósito con rollover.
+//   'deposit' = depósito con rollover (lo de antes del #354) → en 1girox figura como CARGA y descuadra el cierre.
+//   'bonus0'  = bono SIN rollover (figura como Bono, pero ese regalo queda retirable).
+let _giftFallbackResolver = null;
+function setGiftFallbackResolver(fn) { _giftFallbackResolver = typeof fn === 'function' ? fn : null; }
+async function _giftFallbackMode() {
+  try { const m = _giftFallbackResolver && (await _giftFallbackResolver()); return m === 'deposit' || m === 'bonus0' ? m : 'merge'; } catch (_) { return 'merge'; }
+}
+// #355 Aviso a server.js si una unificación NO dio el saldo esperado (apaga 'merge' y alerta).
+let _mergeAnomalyHook = null;
+function setGiftMergeAnomalyHook(fn) { _mergeAnomalyHook = typeof fn === 'function' ? fn : null; }
 async function _globalRollover() {
   if (!_rolloverResolver) return null;
   try {
@@ -1013,12 +1027,16 @@ async function withdrawFromUser(username, amount, description = '', reference = 
 //    reclamo, y NO pisa el bono en curso del jugador.
 //  - rolloverX > 0 → jugable ya, retirable tras apostar N× el bono; al cumplir
 //    queda "a reclamar" (claim_required) → server.js lo auto-reclama al entrar
-//    al casino. Como un bono con rollover PISA al bono activo (le debita el
-//    resto), si el jugador tiene bono en curso o sin reclamar por más de
-//    GIFT_BONUS_GUARD_MIN_ARS se cae al DEPÓSITO con multiplier (el
-//    comportamiento anterior): nunca se le quita plata a nadie.
+//    al casino. Un bono con rollover PISA al bono activo (le debita el resto).
+//    Si el jugador tiene bono en curso por más de GIFT_BONUS_GUARD_MIN_ARS:
+//    #355 (default 'merge') se UNIFICA — un bono nuevo por (resto del viejo +
+//    regalo) con el rollover vigente y la MISMA reference; el jugador gana solo
+//    el regalo. Con algo "a reclamar", si el total pasa el máximo de bono, o en
+//    modo 'deposit' → DEPÓSITO con multiplier (figura como Carga en 1girox; la
+//    descripción lo avisa, #356). Modo 'bonus0' → bono sin rollover.
+//    El modo sale de `setGiftFallbackResolver` (Config['bonusRolloverGlobal'].fallback).
 //  - Feat apagado, multiplier no permitido o monto fuera de fixed_min/max →
-//    depósito (con multiplier si había rollover).
+//    depósito (con multiplier si había rollover), descripción marcada (#356).
 //  - Error de red / 5xx en /bonus → se devuelve el fallo tal cual (el caller
 //    reintenta con la MISMA reference y la plataforma deduplica). NO se cae al
 //    depósito en ese caso: podría pagar dos veces.
@@ -1032,16 +1050,25 @@ async function creditGift(username, amount, opts = {}) {
   const reference = opts.reference || null;
 
   let viaBonus = true, why = null;
+  let merge = null;   // #355 { old, total, balBefore } cuando se unifica con el bono activo
+  let bonusMax = 0;
+  let zeroOk = true;  // ¿la plataforma acepta este monto como bono SIN rollover? (para el modo 'bonus0')
+  const fbMode = roll > 0 ? await _giftFallbackMode() : 'merge';
   try {
     const c = await getPlatformConfig();
     const b = (c.success && c.config && c.config.bonus) || null;
     if (!b || b.enabled === false || b.standalone_enabled === false) {
-      viaBonus = false; why = 'bono suelto deshabilitado en la plataforma';
+      viaBonus = false; zeroOk = false; why = 'bono suelto deshabilitado en la plataforma';
     } else {
       const allowed = Array.isArray(b.multipliers) ? b.multipliers.map(Number) : null;
       if (allowed && allowed.length && !allowed.includes(roll)) { viaBonus = false; why = `multiplier x${roll} no permitido (${allowed.join(',')})`; }
+      if (allowed && allowed.length && !allowed.includes(0)) zeroOk = false;
       const mn = Number(b.fixed_min) || 0, mx = Number(b.fixed_max) || 0;
-      if (viaBonus && ((mn > 0 && amt < mn) || (mx > 0 && amt > mx))) { viaBonus = false; why = `monto $${amt} fuera de fixed_min/max (${mn}-${mx})`; }
+      bonusMax = mx;
+      if ((mn > 0 && amt < mn) || (mx > 0 && amt > mx)) {
+        zeroOk = false;
+        if (viaBonus) { viaBonus = false; why = `monto $${amt} fuera de fixed_min/max (${mn}-${mx})`; }
+      }
     }
   } catch (_) { /* sin config disponible: se intenta el bono igual */ }
 
@@ -1051,29 +1078,88 @@ async function creditGift(username, amount, opts = {}) {
       const locked = info ? (Number(info.bonusLocked) || 0) : 0;
       const claim = info ? (Number(info.claimableTotal) || 0) : 0;
       if (locked + claim > GIFT_BONUS_GUARD_MIN_ARS) {
-        viaBonus = false;
-        why = `bono activo en el casino ($${locked} en rollover, $${claim} sin reclamar) — un bono nuevo lo pisaría`;
+        const old = Math.round(locked * 100) / 100;
+        const total = Math.round((amt + old) * 100) / 100;
+        const activo = `bono activo en el casino ($${locked} en rollover, $${claim} sin reclamar)`;
+        // #355 UNIFICAR: solo con un bono BLOQUEADO y nada "a reclamar" (un bono ya cumplido no se toca).
+        if (fbMode !== 'merge') { viaBonus = false; why = `${activo} — un bono nuevo lo pisaría`; }
+        else if (claim > 0) { viaBonus = false; why = `${activo} — tiene un bono cumplido sin reclamar: no se unifica`; }
+        else if (bonusMax > 0 && total > bonusMax) { viaBonus = false; why = `${activo} — unificado serían $${total}, más que el máximo de bono (${bonusMax})`; }
+        else merge = { old, total, balBefore: Number(info.balance) };
       }
     } catch (_) { /* si no se pudo leer, se sigue: la plataforma valida igual */ }
   }
 
   if (viaBonus) {
     // ignoreGlobalRollover: acá el global YA se aplicó (roll) — no volver a resolverlo.
-    const r = await creditUserBalance(username, amt, reference, { multiplier: roll, description, ignoreGlobalRollover: true });
-    if (r.success) { r.via = 'bonus'; r.rolloverApplied = roll; return r; }
+    // #355: unificando, el bono nuevo es por (resto del viejo + regalo); 1girox debita el resto del viejo al otorgarlo.
+    const grant = merge ? merge.total : amt;
+    const desc = merge ? `${description || 'Regalo'} (+ $${merge.old} del bono anterior, unificado)`.slice(0, 500) : description;
+    if (merge) logger.info(`[girox] regalo a ${username} $${amt} (x${roll}): UNIFICA con el bono activo de $${merge.old} → bono nuevo de $${merge.total} (saldo antes $${merge.balBefore})`);
+    const r = await creditUserBalance(username, grant, reference, { multiplier: roll, description: desc, ignoreGlobalRollover: true });
+    if (r.success) {
+      r.via = 'bonus'; r.creditedAs = 'bonus'; r.rolloverApplied = roll;
+      if (merge) {
+        r.mergedOld = merge.old; r.mergedTotal = merge.total; r.giftAmount = amt;
+        // Control: el saldo del jugador tiene que haber subido ~el regalo (no regalo + bono viejo).
+        const after = r.data && Number(r.data.user_balance_after);
+        if (!r.duplicate && Number.isFinite(after) && Number.isFinite(merge.balBefore)) {
+          const gained = Math.round((after - merge.balBefore) * 100) / 100;
+          logger.info(`[girox] unificación de ${username}: saldo $${merge.balBefore} → $${after} (subió $${gained}; esperado $${amt})`);
+          if (gained > amt + Math.max(100, merge.old * 0.5)) {
+            logger.error(`[girox] ⚠️ UNIFICACIÓN ANÓMALA de ${username}: el saldo subió $${gained} y el regalo era $${amt} (bono viejo $${merge.old}) — 1girox no habría debitado el bono anterior`);
+            try {
+              if (_mergeAnomalyHook) {
+                const h = _mergeAnomalyHook({ username, gift: amt, old: merge.old, total: merge.total, balBefore: merge.balBefore, balAfter: after, gained, reference });
+                if (h && typeof h.catch === 'function') h.catch(() => {});
+              }
+            } catch (_) {}
+          }
+        }
+      }
+      return r;
+    }
     const definitivo = ['feature_disabled', 'bonus_out_of_range', 'validation_error', 'invalid_multiplier'].includes(r.code) || r.httpStatus === 422;
     if (!definitivo) return r;
     why = `/bonus rechazó (${r.code || r.error})`;
   }
 
-  const r = await depositToUser(username, amt, description, reference, roll > 0 ? { multiplier: roll } : null);
+  // #354 Opción del panel "bono SIN rollover": el regalo que no pudo salir como bono con rollover sale como bono 0
+  // (figura como Bono y no pisa el bono en curso). MISMA reference. Si la plataforma tampoco acepta el bono 0
+  // (monto fuera de rango, bono suelto apagado) → depósito libre, marcado.
+  if (roll > 0 && fbMode === 'bonus0') {
+    if (zeroOk) {
+      logger.warn(`[girox] regalo a ${username} $${amt}: no puede salir como bono x${roll} → va como BONO SIN rollover (figura como Bono) — ${why || 's/motivo'}`);
+      const g = await creditUserBalance(username, amt, reference, { multiplier: 0, description, ignoreGlobalRollover: true });
+      if (g.success) { g.via = 'bonus'; g.creditedAs = 'bonus'; g.rolloverApplied = 0; g.fallbackReason = why; return g; }
+      const def0 = ['feature_disabled', 'bonus_out_of_range', 'validation_error', 'invalid_multiplier'].includes(g.code) || g.httpStatus === 422;
+      if (!def0) return g; // transitorio: no cambiar de vía (un timeout puede haber acreditado)
+      why = `${why || ''} · el bono sin rollover también fue rechazado (${g.code || g.error})`;
+    }
+    const d0 = await depositToUser(username, amt, _giftAsDepositDesc(description), reference, null);
+    if (d0.success) {
+      d0.via = 'deposit'; d0.creditedAs = 'deposit'; d0.rolloverApplied = 0; d0.fallbackReason = why;
+      logger.warn(`[girox] regalo a ${username} $${amt} fue como DEPÓSITO libre y no como bono: ${why || 's/motivo'}`);
+    }
+    return d0;
+  }
+
+  // #356: la descripción avisa que es un BONO (1girox lo rotula "Carga").
+  const r = await depositToUser(username, amt, _giftAsDepositDesc(description), reference, roll > 0 ? { multiplier: roll } : null);
   if (r.success) {
     r.via = 'deposit';
+    r.creditedAs = 'deposit';
     r.rolloverApplied = roll;
     r.fallbackReason = why;
     logger.warn(`[girox] regalo a ${username} $${amt} (x${roll}) fue como DEPÓSITO y no como bono: ${why || 's/motivo'}`);
   }
   return r;
+}
+
+// #356 Texto de un REGALO que no pudo salir como bono y va por depósito: 1girox lo rotula "Carga", así que la
+// descripción dice bien claro que hay que contarlo como BONO (lo lee quien hace el cierre en el panel de 1girox).
+function _giftAsDepositDesc(description) {
+  return ('BONO (contar como BONO, NO como carga): ' + (description || 'Regalo de la sala') + ' — sale como depósito por una limitación de la API de 1girox').slice(0, 500);
 }
 
 /**
@@ -1532,6 +1618,8 @@ module.exports = {
   // configuración del sitio
   getPlatformConfig,
   setRolloverResolver,
+  setGiftFallbackResolver, // #354
+  setGiftMergeAnomalyHook, // #355
   // bonos pendientes de reclamar
   claimPendingBonus,
   // no soportado

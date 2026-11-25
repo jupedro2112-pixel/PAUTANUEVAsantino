@@ -379,7 +379,7 @@ async function executePayoutsForPeriod(periodKey, options = {}) {
         referrer.username,
         totalAmount,
         payoutReference,
-        { description, ignoreGlobalRollover: true } // comisión, no bono (#278)
+        { description: `COMISIÓN de referidos — ganancias por referidos de ${periodLabel}${isDeltaPayout ? ` (pago #${payoutIndex})` : ''}`, ignoreGlobalRollover: true } // comisión, no bono (#278) · #357 (solo el texto hacia 1girox)
       );
 
       if (!creditResult.success) {
@@ -441,7 +441,8 @@ async function executePayoutsForPeriod(periodKey, options = {}) {
           referralCount: paidReferralsCount,
           payoutId: payoutDoc.id,
           payoutIndex,
-          isDelta: isDeltaPayout
+          isDelta: isDeltaPayout,
+          ...(creditResult.via === 'deposit' ? { creditedAs: 'deposit' } : {}) // #354: salió por depósito → 1girox la muestra como Carga
         }
       });
 

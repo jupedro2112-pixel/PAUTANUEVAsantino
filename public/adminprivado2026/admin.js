@@ -5552,6 +5552,18 @@ function renderTransactionStats(summary) {
                 <span class="stat-number" style="color:#f97316">${formatMoney(summary.fireRewards || 0)}</span>
                 <span class="stat-label">Fueguito</span>
             </div>` : ''}
+            ${summary.giftsAsDeposit > 0 ? `
+            <div class="stat-card" style="border-color:#ef4444" title="Regalos (reembolsos, rakeback, ruleta, fueguito, nivel VIP, comisiones…) que en 1girox quedaron anotados como CARGA porque salieron por depósito. Para el cierre: restá este monto del total de cargas que muestra 1girox. Ya están contados en sus tarjetas de acá (Bonificaciones, Reembolsos, etc.).">
+                <span style="font-size:1.2rem">⚠️</span>
+                <span class="stat-number" style="color:#ef4444">${formatMoney(summary.giftsAsDeposit || 0)}</span>
+                <span class="stat-label">Regalos que 1girox muestra como Carga (${summary.giftsAsDepositCount || 0})</span>
+            </div>` : ''}
+            ${summary.mergedBonus > 0 ? `
+            <div class="stat-card" style="border-color:#38bdf8" title="Regalos que se UNIFICARON con un bono que el jugador ya tenía: en 1girox el Bono figura por (bono anterior + regalo) y aparece una Cancelación de bono por el anterior. Para el cierre: los Bonos de 1girox van a dar este monto DE MÁS respecto de los regalos de acá, compensado por las Cancelaciones de bono.">
+                <span style="font-size:1.2rem">🔗</span>
+                <span class="stat-number" style="color:#38bdf8">${formatMoney(summary.mergedBonus || 0)}</span>
+                <span class="stat-label">Bonos anteriores unificados (${summary.mergedBonusCount || 0})</span>
+            </div>` : ''}
             <div class="stat-card net-balance ${netBalanceClass}">
                 <span class="icon icon-balance"></span>
                 <span class="stat-number">${formatMoney(netBalance)}</span>
@@ -8639,18 +8651,33 @@ async function loadBonusRolloverCfg() {
         const en = document.getElementById('brEnabled');
         if (en) en.checked = cfg.enabled !== false;
         _brRender(cfg);
+        _brFallbackRender(cfg); // #354/#355
     } catch (e) { if (form) form.style.display = 'none'; if (header) header.style.display = 'none'; }
+}
+// #354/#355 Radios "jugador que YA tiene un bono activo": unificar (default) / bono sin rollover / depósito con rollover.
+// Si la unificación se apagó sola por el control de saldo, se avisa en la card.
+function _brFallbackRender(cfg) {
+    const fb = (cfg && (cfg.fallback === 'deposit' || cfg.fallback === 'bonus0')) ? cfg.fallback : 'merge';
+    document.querySelectorAll('input[name="brFallback"]').forEach(function(el) { el.checked = el.value === fb; });
+    const w = document.getElementById('brMergeOff');
+    if (w) {
+        if (cfg && cfg.mergeOffAt && fb === 'deposit') {
+            w.textContent = '🛑 La unificación se APAGÓ SOLA el ' + new Date(cfg.mergeOffAt).toLocaleString('es-AR') + ': ' + (cfg.mergeOffWhy || 'la plataforma no devolvió el saldo esperado') + '. Revisalo en 1girox antes de volver a elegir UNIFICAR.';
+            w.style.display = 'block';
+        } else { w.textContent = ''; w.style.display = 'none'; }
+    }
 }
 async function saveBonusRollover() {
     try {
         const r = await authFetch('/api/admin/bonus-rollover', {
             method: 'POST',
-            body: JSON.stringify({ enabled: document.getElementById('brEnabled').checked, x: _brSelected })
+            body: JSON.stringify({ enabled: document.getElementById('brEnabled').checked, x: _brSelected, fallback: ((document.querySelector('input[name="brFallback"]:checked') || {}).value) || 'merge' })
         });
         const j = await r.json();
         if (!r.ok) { showToast(j.error || 'No se pudo guardar', 'error'); return; }
         _brAllowed = Array.isArray(j.allowed) ? j.allowed.map(Number) : null;
         _brRender(j);
+        _brFallbackRender(j);
         showToast(j.enabled ? ('Rollover global x' + j.effective + ' activado') : 'Rollover global apagado', j.snapped ? 'warning' : 'success');
     } catch (e) { showToast('Error de conexión', 'error'); }
 }

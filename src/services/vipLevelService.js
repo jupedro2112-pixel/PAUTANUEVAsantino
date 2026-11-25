@@ -290,7 +290,7 @@ async function _applyLevels(u, total, ctx) {
     if (!level) break;
     const ref = `vip-lvl-${u.id}-${idx}`;
     const r = await girox.creditUserBalance(u.username, level.levelUpBonusArs, ref, {
-      description: `Bono por alcanzar el nivel VIP ${level.name}`
+      description: `BONO — Premio por alcanzar el nivel VIP ${level.name}` // #357 (solo el texto hacia 1girox)
     });
     if (!r.success) {
       logger.warn(`[vip] bono nivel ${level.name} de ${u.username} no se pudo acreditar (${r.error || 's/detalle'}) — se reintenta en el próximo sync con la MISMA reference`);
@@ -311,6 +311,9 @@ async function _applyLevels(u, total, ctx) {
           amount: level.levelUpBonusArs,
           description: `Nivel VIP ${level.name} alcanzado ${level.emoji}`,
           transactionId: (r.data && (r.data.transfer_id || r.data.transferId)) || null,
+          // #354 salió por depósito (1girox lo muestra como Carga) · #355 unificado con el bono anterior
+          ...(r.mergedOld ? { metadata: { creditedAs: 'bonus', mergedBonus: Number(r.mergedOld) } }
+            : (r.via === 'deposit' ? { metadata: { creditedAs: 'deposit' } } : {})),
           timestamp: new Date()
         });
       } catch (e) {

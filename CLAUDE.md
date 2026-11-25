@@ -154,8 +154,17 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   `girox.creditGift()` → `POST /players/{u}/bonus` con el rollover del flujo (figuran
   como **Bono** en el panel de 1girox, no como Carga). Rollover 0 = regalo directo
   (v1.10: disponible al instante, no pisa nada). Con rollover > 0 el bono PISA a un bono
-  activo → `creditGift` cae a **depósito con `multiplier`** (lo de antes) si el jugador
-  tiene bono en curso/sin reclamar, o si el feat no está. Al cumplir el rollover el bono
+  activo → **#355 (réplica #237 de CARGASGIROXactivo): `creditGift` UNIFICA** — otorga UN bono por
+  `bonus_locked + regalo` con el rollover vigente y la MISMA reference (`result.mergedOld` / `mergedTotal` /
+  `giftAmount`). ⚠️ El monto del regalo en la contabilidad local es SIEMPRE el pedido, nunca `mergedTotal`.
+  Solo cae a **depósito con `multiplier`** (figura como Carga) si hay un bono cumplido sin reclamar, el total
+  pasa el máximo de bono, la plataforma lo rechaza o el feat no está; modo elegible en la card de Rollover
+  GLOBAL (`Config['bonusRolloverGlobal'].fallback` = `merge` | `deposit` | `bonus0`). Si el saldo de la
+  respuesta sube de más, la unificación SE APAGA sola (log `[gift-merge]` + nota interna; acá no hay Telegram).
+  Todo regalo nuevo guarda `..._giftMeta(result)` (o `..._giftMetaFields(result)` dentro de su `metadata`) en
+  su Transaction — alimenta las tarjetas del cierre — y manda a 1girox una `description` que empieza con el
+  TIPO en mayúsculas (`REEMBOLSO …` / `REGALO — …` / `BONO …` / `COMISIÓN …` / `DEVOLUCIÓN …`, #357) sin
+  tocar la descripción de la Transaction local. Test: `node scripts/test-gift-fallback.js`. Al cumplir el rollover el bono
   queda "a reclamar" → se auto-reclama al entrar al casino (`_autoClaimOnEntry`,
   throttle 15 min) y tras cada depósito con bonus. NO volver a usar `depositToUser`
   para regalos. **Rollover GLOBAL (#278):** `Config['bonusRolloverGlobal']` (default ON
