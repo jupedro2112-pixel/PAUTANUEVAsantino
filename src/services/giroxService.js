@@ -1075,6 +1075,7 @@ async function creditGift(username, amount, opts = {}) {
   if (viaBonus && roll > 0) {
     try {
       const info = await getUserInfoByName(username, { fresh: true });
+      if (!info) throw new Error('sin datos');
       const locked = info ? (Number(info.bonusLocked) || 0) : 0;
       const claim = info ? (Number(info.claimableTotal) || 0) : 0;
       if (locked + claim > GIFT_BONUS_GUARD_MIN_ARS) {
@@ -1087,7 +1088,11 @@ async function creditGift(username, amount, opts = {}) {
         else if (bonusMax > 0 && total > bonusMax) { viaBonus = false; why = `${activo} — unificado serían $${total}, más que el máximo de bono (${bonusMax})`; }
         else merge = { old, total, balBefore: Number(info.balance) };
       }
-    } catch (_) { /* si no se pudo leer, se sigue: la plataforma valida igual */ }
+    } catch (e) {
+      // Sin poder leer al jugador no se sabe si tiene un bono activo: otorgar uno a ciegas lo PISARÍA (perdería el
+      // resto del viejo). Va por depósito con rollover, marcado — igual que en CARGASGIROXactivo.
+      viaBonus = false; why = `no se pudo leer el estado del jugador (${(e && e.message) || 'error'})`;
+    }
   }
 
   if (viaBonus) {
