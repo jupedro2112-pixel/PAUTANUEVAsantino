@@ -8,6 +8,49 @@
 
 ## Sesión 2026-11-25
 
+### 358. 💸 ¿De qué CUENTA salen los retiros? — en uso / fija / la de más saldo, saldos a la vista y "🏦 Elegir cuenta" en cada retiro — admin-sw v89
+**Réplica del #223 de AUTOREEMBOLSOSjygactivo** (allá el owner lo probó en producción). Acá se portó adaptando numeración y se
+endureció un punto (ver "Diferencias").
+
+**Problema (reportado en aquel repo):** se ponía una cuenta de hgcash EN USO y el retiro salía de OTRA cuenta. **Causa (leída en el
+código, igual acá):** un token de hgcash puede ver VARIAS cuentas (`GET /accounts`); al cargar un perfil se guardaba como suya "la
+primera en pesos" (`_hgValidateCreds` → `apiAccountId`) y `resolveHgcashAccountId`, si el CBU no coincidía, caía en ese id guardado.
+
+**Qué se hizo**
+- `_hgPickApiAccount(perfil, lista, moneda)`: fijada a mano (`payAccountId`, campo nuevo del perfil) > única > CBU > titular (nombre
+  normalizado, UNA sola coincidencia) > id guardado > adivinar (`how:'guess'`). `resolveHgcashAccountId` la usa; una cuenta adivinada con
+  varias a la vista NO se guarda en el perfil. Al cargar un token que ve varias cuentas ya no se toma "la primera" y se limpia
+  `payAccountId` (alta/edición de cuentas y también el endpoint legacy `/api/admin/hgcash/credentials`).
+- **`Config['payoutSource'] = { mode, fixed }`**: `active` (default: la cuenta EN USO del banco de retiros, como siempre) · `fixed`
+  (siempre esa cuenta) · `richest` (la que más saldo tenga en el momento entre las cuentas de los DOS bancos que pueden pagar).
+- `_payoutPickSource(body, monto)`: `body.source` (elegida para ESE retiro) > `body.provider` > el modo. `/api/admin/payouts/:id/pay`
+  lo deja en `req._paySrc`; hgcash y `_payPayoutViaFinpro` pagan con ESA cuenta. El candado #351 (`_payoutResendGuard` /
+  `_payoutNoteSend` / `_payoutNoteResult`), `hgAccountKey` / `fpAccountKey`, `externalID` y `process_id` NO se tocaron: reciben la
+  cuenta real que paga.
+- Saldos por cuenta (`_paySlotInfo`: hgcash `netBalance`/`balance` de `GET /accounts`; Finpro `getBalance`), caché 20 s.
+- Panel (🏛️ Bancos — Configuración → 🏦 Bancos automáticos): bloque **"💸 ¿De qué CUENTA salen los retiros?"** con los tres modos,
+  saldo y cuenta REAL de cada perfil y, si el token ve varias, selector para fijarla. En el cartel del retiro, **"🏦 Elegir cuenta"**
+  (reemplaza "Pagar con otro banco" cuando hay más de una cuenta). La nota interna agrega `— debitó de "X"` si no coincide con el perfil.
+- Endpoints: `GET/POST /api/admin/payout-sources`, `POST /api/admin/hgcash/accounts/:key/pay-account`.
+
+**Diferencias con el origen**
+- Si la cuenta ELEGIDA (a mano, fija o la de más saldo) deja de existir entre que se elige y se paga, acá el pago se corta con un 400
+  ("ya no está disponible") en los dos bancos. En el origen caía sola en la cuenta en uso (en hgcash, además, con la etiqueta de la
+  elegida en el candado). Es más estricto, no afloja nada.
+- El endpoint legacy de credenciales también deja de tomar "la primera" cuando el token ve varias.
+- Este repo no tiene bajadas (sweeps), pago masivo ni Telegram: `/pay` es el único lugar que manda un retiro al banco.
+
+**Comportamiento que NO cambia:** con el modo por defecto todo sale como antes, salvo que la cuenta de hgcash de un perfil se identifica
+por titular antes que por el id guardado (ese es el arreglo). "La de más saldo": si ninguna alcanza, se frena ANTES de descontar
+fichas; si no se puede leer ningún saldo, usa la cuenta en uso.
+
+**Validación:** `node --check` (server.js, admin.js, admin-sw.js), `check-tdz` OK, los 7 `scripts/test-*.js` OK (los 6 de antes ya
+pasaban; nuevo `test-payout-source.js`, 29 casos en frío).
+**NO probado:** contra hgcash ni Finpro reales, ni el panel en un navegador, ni el server levantado (no hay node_modules). No se conoce
+la forma exacta de `GET /accounts` cuando el token ve varias cuentas (se asume que trae `name`/`holderName` y `netBalance`/`balance`):
+lo primero a mirar tras el deploy es el bloque nuevo del panel, que muestra qué cuenta real debita cada perfil. El 400 de "cuenta
+elegida ya no disponible" no tiene test.
+
 > Las cuatro entradas de hoy son la **réplica de CARGASGIROXactivo #236, #237, #238 y #239**. El problema se confirmó EN AQUEL REPO con
 > los logs de producción (312 regalos anotados como "Carga" en 17 días; 239 porque el jugador ya tenía un bono activo). Acá no se
 > miraron logs: se replica la lógica porque `creditGift` hacía lo mismo (escrito distinto: `viaBonus` / "fue como DEPÓSITO y no como

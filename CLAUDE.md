@@ -115,6 +115,11 @@ Deploy: AWS Elastic Beanstalk. Dominio público: vipcargas.com. Git user: jupedr
   antes de reclamarlo, `_payoutNoteSend(...)` justo antes del POST al banco y `_payoutNoteResult(...)` con la respuesta. En hgcash el token
   va EXPLÍCITO (`createCashOut({ token })`, cuenta fijada al empezar el pedido), nunca el global de "la cuenta en uso". No aflojar la espera
   de 2 minutos ni dar por "rechazado" un envío sin respuesta clara. Test: `node scripts/test-payout-guard.js`.
+- **De qué cuenta sale un retiro (#358, réplica #223 de AUTOREEMBOLSOSjygactivo):** lo decide `_payoutPickSource` (elegida para ese
+  retiro > `Config['payoutSource']`: en uso / fija / la de más saldo) y queda en `req._paySrc`; los dos caminos de pago usan ESA cuenta,
+  no "la que está en uso", y si la cuenta elegida dejó de existir se corta (nunca se cae sola en otra). Un token de hgcash puede ver
+  varias cuentas: la de un perfil la resuelve `_hgPickApiAccount` (fijada a mano `payAccountId` > CBU > titular); nunca volver a tomar
+  "la primera de la lista". Detalle en `docs/ARCHITECTURE.md` §11.4b. Test: `node scripts/test-payout-source.js`.
 - **Salientes del banco SIEMPRE vinculados (#352):** una salida que el banco informa sin vínculo a un retiro (`BankMovement.outKind:'unknown'`;
   el webhook de hgcash clasifica los salientes por `externalID` desde el #352) dispara `_alertUnknownOutbound` ("POSIBLE PAGO DOBLE" /
   "PAGADO POR FUERA" en el chat si coincide monto + CBU con un retiro; **sin Telegram acá**: si no coincide con ningún retiro queda solo en

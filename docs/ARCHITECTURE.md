@@ -5,7 +5,8 @@
 > verdad y este doc puede quedar viejo. Si encontrás algo desactualizado acá, corregilo
 > (regla permanente en CLAUDE.md: este doc se actualiza junto con WORKLOG.md).
 >
-> Última actualización: **2026-11-25** — **regalo a un jugador con bono activo → se UNIFICA con el bono anterior, tarjetas del cierre
+> Última actualización: **2026-11-25** — **de qué CUENTA salen los retiros: en uso / fija / la de más saldo, saldos por cuenta y
+> "🏦 Elegir cuenta" (#358, réplica #223 de AUTOREEMBOLSOSjygactivo; §11.4b)** · antes: **regalo a un jugador con bono activo → se UNIFICA con el bono anterior, tarjetas del cierre
 > en Transacciones y descripción detallada de toda acreditación hacia 1girox (#354–#357, réplica #236–#239 de CARGASGIROXactivo; §4.5)**.
 > Antes: **2026-11-22** — **candado anti pago doble entre cuentas/bancos, código COELSA del comprobante, alerta de pagos
 > salientes hechos por fuera de la app, comprobante de los pagos por Finpro y retiro "VERIFICANDO" (#351–#353, réplica #219–#221 de
@@ -1382,6 +1383,26 @@ Pagar / Pagar nuevamente · Pagar con otro banco · Ya lo pagué por fuera). Fin
 `_deductChipsAtConfirm` (mismo guard `debitConfirmed !== true`), guarda `fpProcessId`/`fpTransactionId`/`fpAccountKey` y manda UN lote
 (`withCvuLock`). Sin respuesta → queda `paying` con `fpAccepted:null` y `_finproSyncPayout` (poll hasta 24 h, botón sincronizar, callback
 `POST /api/finpro/callback`) pregunta con la cuenta que pagó y aplica vía `handlePayoutStatusWebhook(p, 'finpro')`.
+
+### 11.4b De qué cuenta sale cada retiro (#358, réplica #223 de AUTOREEMBOLSOSjygactivo)
+`_payoutPickSource(body, monto)` → `{ provider, key }` (key `null` = la cuenta en uso de ese banco). Prioridad: `body.source`
+(cuenta elegida para ESE retiro, botón "🏦 Elegir cuenta") > `body.provider` (panel viejo cacheado) > `Config['payoutSource'].mode`:
+`active` (default, lo de siempre) · `fixed` (`hgcash:a2` / `finpro:f1`) · `richest` (mayor saldo entre `_paySlots()`, las cuentas de los
+dos bancos que pueden pagar; saldos por `_paySlotInfo`, caché 20 s; si ninguna alcanza se frena ANTES de descontar fichas; si no se lee
+ningún saldo, usa la cuenta en uso). La ruta `/pay` lo deja en `req._paySrc` y los dos caminos pagan con esa cuenta (perfil + token /
+credenciales); el candado #351, `hgAccountKey` / `fpAccountKey` y el recibo reciben esa misma cuenta. Si la cuenta elegida dejó de existir
+entre que se eligió y se paga → 400, no se cae sola en la que esté en uso.
+En hgcash, la cuenta REAL que debita un perfil la decide `_hgPickApiAccount` (fijada a mano `payAccountId` > única > CBU > titular > id
+guardado > adivinar `how:'guess'`): un token puede ver varias cuentas (`GET /accounts`). Una cuenta adivinada no se guarda en el perfil;
+al cargar un token que ve varias tampoco se toma "la primera". `_hgLastApiPick` recuerda lo último resuelto (la nota interna agrega
+`— debitó de "X"` vía `_hgDebitNote` si no coincide con el perfil).
+Endpoints: `GET /api/admin/payout-sources` (quien paga retiros) · `POST /api/admin/payout-sources` y
+`POST /api/admin/hgcash/accounts/:key/pay-account` (solo admin general). `GET /api/admin/payouts` suma `payFrom`, `paySources`, `payFromReady`.
+Panel: bloque "💸 ¿De qué CUENTA salen los retiros?" en 🏦 Bancos automáticos (`loadPayoutSources` / `savePayoutSource` / `pinHgPayAccount`)
+y `choosePayoutAccount` en el cartel del retiro.
+**Trampas:** la rotación (§11.5) y "USAR ESTA" no cambian de dónde salen los retiros si el modo es `fixed` / `richest`; un flujo nuevo
+que pague dentro de `/pay` no lee `_hgActiveKey` / `_fpActiveAccount()` directo (usa `req._paySrc`). En este repo `/pay` es el ÚNICO lugar
+que manda un retiro al banco (no hay pago masivo ni bajadas). Test: `node scripts/test-payout-source.js`.
 
 ### 11.5 Rotación automática y barra única
 `Config['bankRotation']` + `_bankRotationTick` (cada 2 min, por instancia; todo APAGADO por defecto). Rota la cuenta EN USO del banco que ve
